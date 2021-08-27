@@ -5,9 +5,46 @@
 #ifndef BIPPLAYER_NATIVE_LIB_H
 #define BIPPLAYER_NATIVE_LIB_H
 
+#include <jni.h>
+#include <string>
+#include <android/native_window_jni.h>
+#include <SLES/OpenSLES.h>
+#include <SLES/OpenSLES_Android.h>
+#include <queue>
+#include <android/log.h>
 
-void init();
+#define LOGE(FORMAT, ...) __android_log_print(ANDROID_LOG_DEBUG,"BipPlayerNativeLib",FORMAT,##__VA_ARGS__)
 
-void _setVideoSurface(JNIEnv *env, jobject instance,jobject surface);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "libavcodec/avcodec.h"
+#include "libavformat/avformat.h"
+#include "libavutil/imgutils.h"
+#include "libswscale/swscale.h"
+#include <unistd.h>
+#include <libswresample/swresample.h>
+#include <pthread.h>
+#ifdef __cplusplus
+};
+#endif
+
+void createPlayer();
+
+void createEngine();
+
+void createMixVolume();
+
+void *playAudio(void *args);
+
+void *showVideoPacket(void *args);
+
+void setVideoSurface(JNIEnv *env, jobject instance, jobject surface);
+
+void bufferQueueCallback(
+        SLAndroidSimpleBufferQueueItf caller,
+        void *pContext
+);
 
 #endif //BIPPLAYER_NATIVE_LIB_H

@@ -6,9 +6,14 @@ import android.view.SurfaceHolder;
 public class DefaultBIPPlayer implements BIPPlayer {
     private SurfaceHolder mSurfaceHolder;
     private String mDataSource;
+
     // Used to load the 'native-lib' library on application startup.
     static {
         System.loadLibrary("native-lib");
+    }
+
+    DefaultBIPPlayer() {
+        initPlayer();
     }
 
     @Override
@@ -125,10 +130,10 @@ public class DefaultBIPPlayer implements BIPPlayer {
     }
 
 
-
     public native int play(String path);
 
     private native void _setVideoSurface(Surface surface);
 
+    private native void initPlayer();
 
 }
