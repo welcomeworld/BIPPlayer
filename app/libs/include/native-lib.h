@@ -13,7 +13,15 @@
 #include <queue>
 #include <android/log.h>
 
-#define LOGE(FORMAT, ...) __android_log_print(ANDROID_LOG_DEBUG,"BipPlayerNativeLib",FORMAT,##__VA_ARGS__)
+#define LOGE(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"BipPlayerNativeLib",FORMAT,##__VA_ARGS__)
+#define LOGD(FORMAT, ...) __android_log_print(ANDROID_LOG_DEBUG,"BipPlayerNativeLib",FORMAT,##__VA_ARGS__)
+/* no AV sync correction is done if below the minimum AV sync threshold */
+#define AV_SYNC_THRESHOLD_MIN 0.04
+/* AV sync correction is done if above the maximum AV sync threshold */
+#define AV_SYNC_THRESHOLD_MAX 0.1
+/* If a frame duration is longer than this, it will not be duplicated to compensate AV sync */
+#define AV_SYNC_FRAMEDUP_THRESHOLD 0.1
+
 
 
 #ifdef __cplusplus
@@ -23,6 +31,7 @@ extern "C" {
 #include "libavformat/avformat.h"
 #include "libavutil/imgutils.h"
 #include "libswscale/swscale.h"
+#include <libavutil/time.h>
 #include <unistd.h>
 #include <libswresample/swresample.h>
 #include <pthread.h>

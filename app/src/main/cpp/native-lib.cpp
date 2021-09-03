@@ -29,22 +29,68 @@ SLEnvironmentalReverbSettings settings = SL_I3DL2_ENVIRONMENT_PRESET_DEFAULT;//�
 SLObjectItf audioPlayerObject;//用SLObjectItf声明播放器接口对象
 SLPlayItf slPlayItf;//播放器接口
 SLAndroidSimpleBufferQueueItf slBufferQueueItf;//缓冲区队列接口
+AVRational audioTimeBase;
+double audioClock;//音频时钟
+AVRational videoTimeBase;
+double videoClock;//视频时钟
 
 void *showVideoPacket(void *args) {
     //视频缓冲区
     ANativeWindow_Buffer nativeWindowBuffer;
+    double last_play  //上一帧的播放时间
+    , play             //当前帧的播放时间
+    , last_delay    // 上一次播放视频的两帧视频间隔时间
+    , delay         //线程休眠时间
+    , diff   //音频帧与视频帧相差时间
+    , sync_threshold //合理的范围
+    , pts
+    , decodeStartTime //每一帧解码开始时间
+    , frame_time_stamp = av_q2d(videoTimeBase); //时间戳的实际时间单位
     while (!playState) {
         if (!videoPacketQueue.empty()) {
+            decodeStartTime = av_gettime() / 1000000.0;
             AVPacket *packet = videoPacketQueue.front();
             videoPacketQueue.pop();
             avcodec_send_packet(avCodecContext, packet);
             AVFrame *frame = av_frame_alloc();
-            if (!avcodec_receive_frame(avCodecContext, frame) && (nativeWindow != nullptr)) {
-                //配置nativeWindow
-                ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
-                                                 avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
+            if (!avcodec_receive_frame(avCodecContext, frame)) {
+                if ((pts = frame->best_effort_timestamp) == AV_NOPTS_VALUE) {
+                    pts = videoClock;
+                }
+                play = pts * frame_time_stamp;
+                videoClock =
+                        play + (frame->repeat_pict * 0.5 * frame_time_stamp + frame_time_stamp);
+                delay = play - last_play;
+                diff = videoClock - audioClock;
+                sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN, FFMIN(AV_SYNC_THRESHOLD_MAX, delay));
+                if (fabs(diff) < 10) {
+                    if (diff <= -sync_threshold) {
+                        delay = FFMAX(0.01, delay + diff);
+                    } else if (diff >= sync_threshold && delay > AV_SYNC_FRAMEDUP_THRESHOLD) {
+                        delay = delay + diff;
+                    } else if (diff >= sync_threshold && delay) {
+                        delay = 2 * delay;
+                    }
+                }
+                if (delay <= 0 || delay > 1) {
+                    delay = last_delay;
+                }
+                last_delay = delay;
+                //减去解码消耗时间
+                delay = delay + (decodeStartTime - av_gettime() / 1000000.0);
+                if (delay < 0) {
+                    delay = 0;
+                }
+                last_play = play;
+                LOGE("videoClock:%lf diff:%lf delay:%lf sync_threshold %lf", videoClock, diff,
+                     delay, sync_threshold);
                 //上锁
                 if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
+                    if (delay > 0.001) {
+                        av_usleep(delay * 1000000);
+                    }
+                    av_frame_free(&frame);
+                    av_packet_unref(packet);
                     continue;
                 }
                 //转换成RGBA格式
@@ -63,9 +109,11 @@ void *showVideoPacket(void *args) {
                     memcpy(dst + i * destStride, src + i * srcStride, srcStride);
                 }
                 ANativeWindow_unlockAndPost(nativeWindow);
-                usleep(1000 * 16);
+                if (delay > 0.001) {
+                    av_usleep(delay * 1000000);
+                }
             } else {
-                usleep(100);
+                usleep(1000);
             }
             av_frame_free(&frame);
             av_packet_unref(packet);
@@ -89,7 +137,16 @@ int getPcm() {
                 int size = av_samples_get_buffer_size(nullptr, outChannelsNumber,
                                                       audioFrame->nb_samples,
                                                       AV_SAMPLE_FMT_S16, 1);
-                LOGE("获取音频队列数据 %d", size);
+                if (audioFrame->pts != AV_NOPTS_VALUE) {
+                    //这一帧的起始时间
+                    audioClock = audioFrame->pts * av_q2d(audioTimeBase);
+                    //这一帧数据的时间
+                    double time = size / ((double) 44100 * 2 * 2);
+                    //最终音频时钟
+                    audioClock = time + audioClock;
+                    LOGD("时间基 %lf 时间戳 %ld 当前一帧声音时间%lf   播放时间%lf", av_q2d(audioTimeBase),
+                         packet->pts, time, audioClock);
+                }
                 av_frame_free(&audioFrame);
                 av_packet_unref(packet);
                 return size;
@@ -145,7 +202,7 @@ void createPlayer() {
                                                                &dataSource, &slDataSink, 3, ids,
                                                                req);
     if (playerResult != SL_RESULT_SUCCESS) {
-        LOGE("创建播放器失败 %d", playerResult);
+        LOGD("创建播放器失败 %d", playerResult);
         return;
     }
     (*audioPlayerObject)->Realize(audioPlayerObject, SL_BOOLEAN_FALSE);
@@ -183,8 +240,10 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
     for (int i = 0; i < avFormatContext->nb_streams; ++i) {
         if (avFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
             video_index = i;
+            videoTimeBase = avFormatContext->streams[i]->time_base;
         } else if (avFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
             audio_index = i;
+            audioTimeBase = avFormatContext->streams[i]->time_base;
         }
     }
     //打开视频解码器
@@ -194,6 +253,11 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
     avcodec_parameters_to_context(avCodecContext, avFormatContext->streams[video_index]->codecpar);
     if (avcodec_open2(avCodecContext, avCodec, nullptr) < 0) {
         return -1;
+    }
+    if (nativeWindow != nullptr) {
+        //配置nativeWindow
+        ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
+                                         avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
     }
     //打开音频解码器
     AVCodec *audioCodec = avcodec_find_decoder(
@@ -244,7 +308,6 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
                 //克隆失败
                 return 0;
             }
-            LOGE("获得数据视频index %d", packet->stream_index);
             videoPacketQueue.push(videoPacket);
         } else if (packet->stream_index == audio_index) {
             auto *audioPacket = (AVPacket *) av_mallocz(sizeof(AVPacket));
@@ -253,10 +316,7 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
                 //克隆失败
                 return 0;
             }
-            LOGE("获得数据音频index %d", packet->stream_index);
             audioPacketQueue.push(audioPacket);
-        } else {
-            LOGE("获得数据index %d", packet->stream_index);
         }
         av_packet_unref(packet);
     }
@@ -285,6 +345,11 @@ void setVideoSurface(JNIEnv *env, jobject instance, jobject surface) {
         nativeWindow = nullptr;
     }
     nativeWindow = ANativeWindow_fromSurface(env, surface);
+    if (avCodecContext != nullptr) {
+        //配置nativeWindow
+        ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
+                                         avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
+    }
 }
 
 void init(JNIEnv *env, jobject instance) {
