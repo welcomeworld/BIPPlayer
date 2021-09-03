@@ -13,6 +13,16 @@
 #include <queue>
 #include <android/log.h>
 
+enum PlayerState {
+    STATE_UN_DEFINE = 0, ///< Undefined
+    STATE_PREPARING,
+    STATE_PLAYING,
+    STATE_PAUSED,
+    STATE_BUFFERING,
+    STATE_ERROR,
+    STATE_COMPLETED
+};
+
 #define LOGE(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"BipPlayerNativeLib",FORMAT,##__VA_ARGS__)
 #define LOGD(FORMAT, ...) __android_log_print(ANDROID_LOG_DEBUG,"BipPlayerNativeLib",FORMAT,##__VA_ARGS__)
 /* no AV sync correction is done if below the minimum AV sync threshold */

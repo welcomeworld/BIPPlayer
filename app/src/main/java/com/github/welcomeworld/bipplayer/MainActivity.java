@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat;
 import com.github.welcomeworld.bipplayer.databinding.ActivityMainBinding;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
 
 public class MainActivity extends AppCompatActivity {
     BIPPlayer bipPlayer = new DefaultBIPPlayer();
@@ -61,13 +62,33 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         bipPlayer.setDisplay(binding.surface.getHolder());
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
-                bipPlayer.setDataSource(file.getAbsolutePath());
-                bipPlayer.prepareAsync();
+        new Thread(() -> {
+            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
+            bipPlayer.setDataSource(file.getAbsolutePath());
+            bipPlayer.prepareAsync();
+        }).start();
+        new Thread(() -> {
+            while (true) {
+                runOnUiThread(() -> {
+                    long position = bipPlayer.getCurrentPosition();
+                    long duration = bipPlayer.getDuration();
+                    binding.position.setText(formatTime(position));
+                    binding.duration.setText(formatTime(duration));
+                    binding.videoHeight.setText("height:" + bipPlayer.getVideoHeight() + "px");
+                    binding.videoWidth.setText("width:" + bipPlayer.getVideoWidth() + "px");
+                    binding.seekBar.setProgress((int) (position * 1000 / duration));
+                });
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }).start();
+    }
+
+    private static String formatTime(long time) {
+        SimpleDateFormat format = new SimpleDateFormat("mm:ss");
+        return format.format(time);
     }
 }

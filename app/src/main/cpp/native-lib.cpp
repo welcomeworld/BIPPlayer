@@ -12,7 +12,7 @@ uint64_t outChLayout = AV_CH_LAYOUT_STEREO;
 //音频重采样通道数
 int outChannelsNumber = 2;
 //播放状态
-int playState = 0;
+PlayerState playState = STATE_UN_DEFINE;
 pthread_t audioPlayId;//音频处理线程id
 pthread_t videoPlayId;//视频处理线程id
 AVFrame *rgb_frame;
@@ -33,6 +33,7 @@ AVRational audioTimeBase;
 double audioClock;//音频时钟
 AVRational videoTimeBase;
 double videoClock;//视频时钟
+long duration = -1;
 
 void *showVideoPacket(void *args) {
     //视频缓冲区
@@ -46,7 +47,7 @@ void *showVideoPacket(void *args) {
     , pts
     , decodeStartTime //每一帧解码开始时间
     , frame_time_stamp = av_q2d(videoTimeBase); //时间戳的实际时间单位
-    while (!playState) {
+    while (playState == STATE_PLAYING) {
         if (!videoPacketQueue.empty()) {
             decodeStartTime = av_gettime() / 1000000.0;
             AVPacket *packet = videoPacketQueue.front();
@@ -123,7 +124,7 @@ void *showVideoPacket(void *args) {
 }
 
 int getPcm() {
-    while (!playState) {
+    while (playState == STATE_PLAYING) {
         if (!audioPacketQueue.empty()) {
 //            LOGE("获取音频队列数据");
             AVFrame *audioFrame = av_frame_alloc();
@@ -234,6 +235,7 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
     avformat_open_input(&avFormatContext, inputPath, nullptr, nullptr);
     avformat_find_stream_info(avFormatContext, nullptr);
+    duration = avFormatContext->duration / 1000;
     //找到视频流
     int video_index = -1;
     int audio_index = -1;
@@ -320,6 +322,7 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
         }
         av_packet_unref(packet);
     }
+    playState = STATE_PLAYING;
     pthread_create(&audioPlayId, nullptr, playAudio, nullptr);//开启begin线程
     pthread_create(&videoPlayId, nullptr, showVideoPacket, nullptr);//开启begin线程
     while (true) {
@@ -327,7 +330,7 @@ jint native_play(JNIEnv *env, jobject instance, jstring inputPath_) {
             break;
         }
     }
-    playState = 1;
+    playState = STATE_COMPLETED;
 
     ANativeWindow_release(nativeWindow);
     av_frame_free(&rgb_frame);
@@ -359,10 +362,41 @@ void init(JNIEnv *env, jobject instance) {
     LOGE("播放器初始化");
 }
 
+jlong getDuration(JNIEnv *env, jobject instance) {
+    return duration;
+}
+
+jlong getCurrentPosition(JNIEnv *env, jobject instance) {
+    return audioClock * 1000;
+}
+
+jint getVideoHeight(JNIEnv *env, jobject instance) {
+    if (avCodecContext != nullptr) {
+        return avCodecContext->height;
+    }
+    return 0;
+}
+
+jint getVideoWidth(JNIEnv *env, jobject instance) {
+    if (avCodecContext != nullptr) {
+        return avCodecContext->width;
+    }
+    return 0;
+}
+
+jboolean isPlaying(JNIEnv *env, jobject instance) {
+    return playState == STATE_PLAYING;
+}
+
 static JNINativeMethod methods[] = {
-        {"play",             "(Ljava/lang/String;)I",     (void *) native_play},
-        {"_setVideoSurface", "(Landroid/view/Surface;)V", (void *) setVideoSurface},
-        {"initPlayer",       "()V",                       (void *) init}
+        {"play",               "(Ljava/lang/String;)I",     (void *) native_play},
+        {"_setVideoSurface",   "(Landroid/view/Surface;)V", (void *) setVideoSurface},
+        {"initPlayer",         "()V",                       (void *) init},
+        {"getDuration",        "()J",                       (void *) getDuration},
+        {"getCurrentPosition", "()J",                       (void *) getCurrentPosition},
+        {"getVideoHeight",     "()I",                       (void *) getVideoHeight},
+        {"getVideoWidth",      "()I",                       (void *) getVideoWidth},
+        {"isPlaying",          "()Z",                       (void *) isPlaying}
 };
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {

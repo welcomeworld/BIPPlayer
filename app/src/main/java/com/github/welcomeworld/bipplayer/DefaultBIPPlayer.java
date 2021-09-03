@@ -7,7 +7,6 @@ public class DefaultBIPPlayer implements BIPPlayer {
     private SurfaceHolder mSurfaceHolder;
     private String mDataSource;
 
-    // Used to load the 'native-lib' library on application startup.
     static {
         System.loadLibrary("native-lib");
     }
@@ -63,9 +62,7 @@ public class DefaultBIPPlayer implements BIPPlayer {
     }
 
     @Override
-    public boolean isPlaying() {
-        return false;
-    }
+    public native boolean isPlaying();
 
     @Override
     public void pause() {
@@ -73,24 +70,16 @@ public class DefaultBIPPlayer implements BIPPlayer {
     }
 
     @Override
-    public long getDuration() {
-        return 0;
-    }
+    public native long getDuration();
 
     @Override
-    public long getCurrentPosition() {
-        return 0;
-    }
+    public native long getCurrentPosition();
 
     @Override
-    public int getVideoWidth() {
-        return 0;
-    }
+    public native int getVideoWidth();
 
     @Override
-    public int getVideoHeight() {
-        return 0;
-    }
+    public native int getVideoHeight();
 
     @Override
     public void setDisplay(SurfaceHolder sh) {
