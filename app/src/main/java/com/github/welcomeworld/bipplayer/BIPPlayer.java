@@ -36,7 +36,11 @@ public interface BIPPlayer {
         void onSeekComplete(BIPPlayer bp);
     }
 
-    void updatePlayer();
+    interface OnBufferingUpdateListener {
+        void onBufferingUpdate(BIPPlayer bp, int var2);
+    }
+
+    void stop();
 
     boolean isPlaying();
 
@@ -61,4 +65,6 @@ public interface BIPPlayer {
     void prepareQualityAsync(String path);
 
     void setOnSeekCompleteListener(OnSeekCompleteListener listener);
+
+    void setOnBufferingUpdateListener(OnBufferingUpdateListener listener);
 }

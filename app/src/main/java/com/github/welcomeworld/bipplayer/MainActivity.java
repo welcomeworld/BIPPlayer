@@ -6,6 +6,8 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.SurfaceHolder;
+import android.view.View;
+import android.widget.SeekBar;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,7 +20,7 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 
 public class MainActivity extends AppCompatActivity {
-    BIPPlayer bipPlayer = new DefaultBIPPlayer();
+    DefaultBIPPlayer bipPlayer = new DefaultBIPPlayer();
 
     private ActivityMainBinding binding;
 
@@ -62,11 +64,39 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         bipPlayer.setDisplay(binding.surface.getHolder());
-        new Thread(() -> {
-            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
-            bipPlayer.setDataSource(file.getAbsolutePath());
-            bipPlayer.prepareAsync();
-        }).start();
+        bipPlayer.setScreenOnWhilePlaying(true);
+        binding.videoPrepare.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
+                bipPlayer.setDataSource(file.getAbsolutePath());
+                bipPlayer.prepareAsync();
+            }
+        });
+        binding.videoStart.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                bipPlayer.start();
+            }
+        });
+        binding.videoPause.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                bipPlayer.pause();
+            }
+        });
+        binding.videoStop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                bipPlayer.stop();
+            }
+        });
+        binding.videoReset.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                bipPlayer.reset();
+            }
+        });
         new Thread(() -> {
             while (true) {
                 runOnUiThread(() -> {
@@ -85,10 +115,35 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }).start();
+        binding.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                bipPlayer.seekTo(seekBar.getProgress() * bipPlayer.getDuration() / 1000);
+            }
+        });
+        bipPlayer.setOnPreparedListener(BIPPlayer::start);
     }
 
     private static String formatTime(long time) {
         SimpleDateFormat format = new SimpleDateFormat("mm:ss");
         return format.format(time);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (bipPlayer != null) {
+            bipPlayer.release();
+            bipPlayer = null;
+        }
     }
 }
