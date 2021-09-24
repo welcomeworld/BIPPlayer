@@ -1,4 +1,4 @@
-package com.github.welcomeworld.bipplayer;
+package com.github.welcomeworld.bipplayer.sample;
 
 import android.app.Application;
 

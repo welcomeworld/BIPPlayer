@@ -38,7 +38,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         System.loadLibrary("native-lib");
     }
 
-    DefaultBIPPlayer() {
+    public DefaultBIPPlayer() {
         Looper looper;
         if ((looper = Looper.myLooper()) != null) {
             mEventHandler = new EventHandler(this, looper);

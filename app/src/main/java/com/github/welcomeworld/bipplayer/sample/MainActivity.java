@@ -1,4 +1,4 @@
-package com.github.welcomeworld.bipplayer;
+package com.github.welcomeworld.bipplayer.sample;
 
 import android.Manifest;
 import android.app.Activity;
@@ -14,7 +14,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.github.welcomeworld.bipplayer.databinding.ActivityMainBinding;
+import com.github.welcomeworld.bipplayer.BIPPlayer;
+import com.github.welcomeworld.bipplayer.DefaultBIPPlayer;
+import com.github.welcomeworld.bipplayer.sample.databinding.ActivityMainBinding;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
