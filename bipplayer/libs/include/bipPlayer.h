@@ -50,7 +50,8 @@ enum PlayerState {
 
 enum ErrorState {
     ERROR_NOT_PREPARED,
-    ERROR_STATE_ILLEGAL
+    ERROR_STATE_ILLEGAL,
+    ERROR_PREPARE_FAILED
 };
 
 class BipPlayer {

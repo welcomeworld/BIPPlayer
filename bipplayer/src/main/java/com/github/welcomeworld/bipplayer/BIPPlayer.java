@@ -67,4 +67,6 @@ public interface BIPPlayer {
     void setOnSeekCompleteListener(OnSeekCompleteListener listener);
 
     void setOnBufferingUpdateListener(OnBufferingUpdateListener listener);
+
+    void setOption(int category, String name, String value);
 }

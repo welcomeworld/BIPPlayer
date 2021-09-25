@@ -278,4 +278,10 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         super.finalize();
         native_finalize();
     }
+
+    /**
+     * should call before call prepare
+     */
+    @Override
+    public native void setOption(int category, String name, String value);
 }

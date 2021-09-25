@@ -331,8 +331,19 @@ void BipPlayer::prepare() {
     AVDictionary *dic = nullptr;
     av_dict_set(&dic, "bufsize", "655360", 0);
 //    av_dict_set(&dic,"stimeout","2000000",0);
-    avformat_open_input(&avFormatContext, inputPath, nullptr, &dic);
-    avformat_find_stream_info(avFormatContext, nullptr);
+    int prepareResult;
+    prepareResult = avformat_open_input(&avFormatContext, inputPath, nullptr, &dic);
+    if (prepareResult != 0) {
+        playState = STATE_ERROR;
+        postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
+        return;
+    }
+    prepareResult = avformat_find_stream_info(avFormatContext, nullptr);
+    if (prepareResult != 0) {
+        playState = STATE_ERROR;
+        postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
+        return;
+    }
     duration = avFormatContext->duration / 1000;
     //找到视频流
     for (int i = 0; i < avFormatContext->nb_streams; ++i) {
