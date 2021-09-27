@@ -332,16 +332,21 @@ void BipPlayer::prepare() {
     av_dict_set(&dic, "bufsize", "655360", 0);
 //    av_dict_set(&dic,"stimeout","2000000",0);
     int prepareResult;
+    char *errorMsg = static_cast<char *>(av_malloc(1024));
     prepareResult = avformat_open_input(&avFormatContext, inputPath, nullptr, &dic);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
         postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
+        av_strerror(prepareResult,errorMsg,1024);
+        LOGE("open input error %s",errorMsg);
         return;
     }
     prepareResult = avformat_find_stream_info(avFormatContext, nullptr);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
         postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
+        av_strerror(prepareResult,errorMsg,1024);
+        LOGE("find stream info error %s",errorMsg);
         return;
     }
     duration = avFormatContext->duration / 1000;
@@ -458,6 +463,7 @@ void BipPlayer::prepare() {
         }
         av_packet_unref(packet);
     }
+    av_free(errorMsg);
 }
 
 void BipPlayer::playAudio() {

@@ -78,7 +78,7 @@ void native_start(JNIEnv *env, jobject instance) {
 
 void native_reset(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->start();
+    bipPlayer->reset();
 }
 
 void native_release(JNIEnv *env, jobject instance) {
