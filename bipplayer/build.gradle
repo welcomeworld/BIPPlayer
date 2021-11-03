@@ -50,6 +50,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.welcomeworld'
                 artifactId = 'BIPPlayer'
+                version = '1.0.00'
             }
         }
     }

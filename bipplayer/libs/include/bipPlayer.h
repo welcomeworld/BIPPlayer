@@ -10,6 +10,7 @@
 #include <SLES/OpenSLES_Android.h>
 #include <android/native_window_jni.h>
 #include <android/log.h>
+#include <map>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +39,8 @@ void *prepareVideoThread(void *args);
 void clear(std::queue<AVPacket *> &q);
 
 enum PlayerState {
-    STATE_UN_DEFINE = 0, ///< Undefined
+    STATE_RELEASE = 0,
+    STATE_UN_DEFINE, ///< Undefined
     STATE_ERROR,
     STATE_PREPARING,
     STATE_BUFFERING,
@@ -54,6 +56,14 @@ enum ErrorState {
     ERROR_PREPARE_FAILED
 };
 
+struct ptrCmp
+{
+    bool operator()( const char * s1, const char * s2 ) const
+    {
+        return strcmp( s1, s2 ) < 0;
+    }
+};
+
 class BipPlayer {
 private:
 
@@ -67,6 +77,15 @@ private:
     constexpr static const double AV_SYNC_THRESHOLD_MIN = 0.04;
     constexpr static const double AV_SYNC_THRESHOLD_MAX = 0.1;
 
+    static const int OPT_CATEGORY_FORMAT = 1;
+    static const int OPT_CATEGORY_CODEC = 2;
+    static const int OPT_CATEGORY_SWS = 3;
+    static const int OPT_CATEGORY_PLAYER = 4;
+
+    std::map<const char*,const char*,ptrCmp> formatOps;
+    std::map<const char*,const char*,ptrCmp> codecOps;
+    std::map<const char*,const char*,ptrCmp> playerOps;
+    std::map<const char*,const char*,ptrCmp> swsOps;
 
     //创建引擎
     void createEngine();
@@ -80,6 +99,8 @@ private:
     int getPcm();
 
     void postEventFromNative(int what, int arg1, int arg2, void *object) const;
+
+    void notifyPrepared();
 
 public:
 
@@ -115,6 +136,8 @@ public:
 
     void release();
 
+    void setOption(int category,const char *key, const char *value);
+
     BipPlayer();
 
     ~BipPlayer();
@@ -126,13 +149,13 @@ public:
     long duration = -1;//单位毫秒
     void *weakJavaThis;
     const char *inputPath;
-    pthread_t prepareThreadId;
+    pthread_t prepareThreadId = 0;
     AVFormatContext *avFormatContext;
 
     //video
-    AVCodecContext *avCodecContext;
+    AVCodecContext *avCodecContext = nullptr;
     SwsContext *swsContext;
-    ANativeWindow *nativeWindow;
+    ANativeWindow *nativeWindow = nullptr;
     int video_index = -1;
     //视频Packet队列
     std::queue<AVPacket *> videoPacketQueue;
@@ -140,7 +163,7 @@ public:
     pthread_cond_t videoCond;
     AVRational videoTimeBase;
     double videoClock;//视频时钟,单位秒
-    pthread_t videoPlayId;//视频处理线程id
+    pthread_t videoPlayId = 0;//视频处理线程id
     AVFrame *rgb_frame;
 
     //audio
@@ -169,7 +192,7 @@ public:
     int audio_index = -1;
     AVRational audioTimeBase;
     double audioClock;//音频时钟,单位秒
-    pthread_t audioPlayId;//音频处理线程id
+    pthread_t audioPlayId = 0;//音频处理线程id
 
 };
 

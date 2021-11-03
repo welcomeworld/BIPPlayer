@@ -14,7 +14,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.github.welcomeworld.bipplayer.BIPPlayer;
 import com.github.welcomeworld.bipplayer.DefaultBIPPlayer;
 import com.github.welcomeworld.bipplayer.sample.databinding.ActivityMainBinding;
 
@@ -49,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         checkPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_PLAYER,"start-on-prepared","1");
+        bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT,"user_agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36");
         binding.surface.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(@NonNull SurfaceHolder holder) {
@@ -101,6 +102,12 @@ public class MainActivity extends AppCompatActivity {
                 bipPlayer.reset();
             }
         });
+        binding.videoRelease.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                bipPlayer.release();
+            }
+        });
         new Thread(() -> {
             while (true) {
                 runOnUiThread(() -> {
@@ -134,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
                 bipPlayer.seekTo(seekBar.getProgress() * bipPlayer.getDuration() / 1000);
             }
         });
-        bipPlayer.setOnPreparedListener(BIPPlayer::start);
+//        bipPlayer.setOnPreparedListener(BIPPlayer::start);
     }
 
     private static String formatTime(long time) {

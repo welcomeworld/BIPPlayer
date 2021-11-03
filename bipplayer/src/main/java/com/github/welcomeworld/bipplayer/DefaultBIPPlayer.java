@@ -21,6 +21,11 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     private static final int MEDIA_INFO = 7;
     private static final int MEDIA_PLAYER_MESSAGE = 8;
 
+    public static final int OPT_CATEGORY_FORMAT = 1;
+    public static final int OPT_CATEGORY_CODEC = 2;
+    public static final int OPT_CATEGORY_SWS = 3;
+    public static final int OPT_CATEGORY_PLAYER = 4;
+
     private SurfaceHolder mSurfaceHolder;
     private boolean mScreenOnWhilePlaying = true;
     private String mDataSource;

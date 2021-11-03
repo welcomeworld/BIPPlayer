@@ -16,11 +16,16 @@ void BipPlayer::createEngine() {
 }
 
 void BipPlayer::release() {
+    if (playState == STATE_RELEASE) {
+        return;
+    }
     reset();
-    ANativeWindow_release(nativeWindow);
+    playState = STATE_RELEASE;
+    if (nativeWindow != nullptr) {
+        ANativeWindow_release(nativeWindow);
+        nativeWindow = nullptr;
+    }
     av_frame_free(&rgb_frame);
-    avcodec_free_context(&avCodecContext);
-    avformat_free_context(avFormatContext);
     pthread_cond_destroy(&videoCond);
     pthread_cond_destroy(&audioCond);
     pthread_mutex_destroy(&videoMutex);
@@ -39,6 +44,25 @@ void BipPlayer::createMixVolume() {
     if (SL_RESULT_SUCCESS == sLresult) {
         (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
                 outputMixEnvironmentalReverb, &settings);
+    }
+}
+
+void BipPlayer::setOption(int category, const char *key, const char *value) {
+    switch (category) {
+        case OPT_CATEGORY_FORMAT:
+            formatOps[key] = value;
+            break;
+        case OPT_CATEGORY_CODEC:
+            codecOps[key] = value;
+            break;
+        case OPT_CATEGORY_PLAYER:
+            playerOps[key] = value;
+            break;
+        case OPT_CATEGORY_SWS:
+            swsOps[key] = value;
+            break;
+        default:
+            break;
     }
 }
 
@@ -101,10 +125,10 @@ int BipPlayer::getPcm() {
         if (!audioPacketQueue.empty()) {
             AVPacket *packet = audioPacketQueue.front();
             audioPacketQueue.pop();
-            pthread_mutex_unlock(&audioMutex);
             AVFrame *audioFrame = av_frame_alloc();
             avcodec_send_packet(audioCodecContext, packet);
             int receiveResult = avcodec_receive_frame(audioCodecContext, audioFrame);
+            pthread_mutex_unlock(&audioMutex);
             if (!receiveResult) {
                 swr_convert(audioSwrContext, &audioBuffer, 44100 * 2,
                             (const uint8_t **) (audioFrame->data), audioFrame->nb_samples);
@@ -163,11 +187,11 @@ void BipPlayer::showVideoPacket() {
         if (!videoPacketQueue.empty()) {
             AVPacket *packet = videoPacketQueue.front();
             videoPacketQueue.pop();
-            pthread_mutex_unlock(&videoMutex);
             decodeStartTime = av_gettime() / 1000000.0;
             avcodec_send_packet(avCodecContext, packet);
             AVFrame *frame = av_frame_alloc();
             if (!avcodec_receive_frame(avCodecContext, frame)) {
+                pthread_mutex_unlock(&videoMutex);
                 if ((pts = frame->best_effort_timestamp) == AV_NOPTS_VALUE) {
                     pts = videoClock;
                 }
@@ -197,7 +221,7 @@ void BipPlayer::showVideoPacket() {
                 //上锁
                 if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
                     if (delay > 0.001) {
-                        av_usleep(delay * 1000000);
+                        av_usleep((int) (delay * 1000000));
                     }
                     av_frame_free(&frame);
                     av_packet_unref(packet);
@@ -220,9 +244,10 @@ void BipPlayer::showVideoPacket() {
                 }
                 ANativeWindow_unlockAndPost(nativeWindow);
                 if (delay > 0.001) {
-                    av_usleep(delay * 1000000);
+                    av_usleep((int) (delay * 1000000));
                 }
             } else {
+                pthread_mutex_unlock(&videoMutex);
                 if (FFABS(audioClock * 1000 - duration) < 500) {
                     playState = STATE_COMPLETED;
                     postEventFromNative(MEDIA_PLAYBACK_COMPLETE, 0, 0, nullptr);
@@ -240,11 +265,13 @@ void BipPlayer::showVideoPacket() {
 
 void BipPlayer::setVideoSurface(ANativeWindow *window) {
     //申请ANativeWindow
-    if (nativeWindow != nullptr) {
+    if (nativeWindow != nullptr && nativeWindow != window) {
         ANativeWindow_release(nativeWindow);
+        nativeWindow = nullptr;
     }
     nativeWindow = window;
-    if (avCodecContext != nullptr) {
+    LOGE("set Surface with window %d", nativeWindow);
+    if (avCodecContext != nullptr && nativeWindow != nullptr) {
         //配置nativeWindow
         ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
                                          avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
@@ -270,6 +297,7 @@ void BipPlayer::postEventFromNative(int what, int arg1, int arg2, void *object) 
 
 void BipPlayer::stop() {
     if (playState <= STATE_ERROR) {
+        LOGE("stop with error state");
         postEventFromNative(MEDIA_ERROR, ERROR_NOT_PREPARED, 0, nullptr);
         return;
     }
@@ -281,15 +309,26 @@ void BipPlayer::stop() {
     pthread_mutex_unlock(&audioMutex);
     pthread_cond_signal(&videoCond);
     pthread_mutex_unlock(&videoMutex);
-    if (pthread_kill(prepareThreadId, 0) == 0) {
+    if (prepareThreadId != 0 && pthread_kill(prepareThreadId, 0) == 0) {
         pthread_join(prepareThreadId, nullptr);
+        prepareThreadId = 0;
     }
-    if (pthread_kill(videoPlayId, 0) == 0) {
+    if (videoPlayId != 0 && pthread_kill(videoPlayId, 0) == 0) {
         pthread_join(videoPlayId, nullptr);
+        videoPlayId = 0;
     }
-    avcodec_free_context(&avCodecContext);
-    avcodec_free_context(&audioCodecContext);
-    avformat_free_context(avFormatContext);
+    if (avCodecContext != nullptr) {
+        avcodec_free_context(&avCodecContext);
+        avCodecContext = nullptr;
+    }
+    if (audioCodecContext != nullptr) {
+        avcodec_free_context(&audioCodecContext);
+        audioCodecContext = nullptr;
+    }
+    if (avFormatContext != nullptr) {
+        avformat_free_context(avFormatContext);
+        avFormatContext = nullptr;
+    }
     clear(audioPacketQueue);
     clear(videoPacketQueue);
     videoClock = 0;
@@ -297,6 +336,9 @@ void BipPlayer::stop() {
 }
 
 void BipPlayer::reset() {
+    if (playState == STATE_RELEASE || playState == STATE_UN_DEFINE) {
+        return;
+    }
     pthread_mutex_lock(&videoMutex);
     pthread_mutex_lock(&audioMutex);
     playState = STATE_UN_DEFINE;
@@ -305,15 +347,26 @@ void BipPlayer::reset() {
     pthread_mutex_unlock(&audioMutex);
     pthread_cond_signal(&videoCond);
     pthread_mutex_unlock(&videoMutex);
-    if (pthread_kill(prepareThreadId, 0) == 0) {
+    if (prepareThreadId != 0 && pthread_kill(prepareThreadId, 0) == 0) {
         pthread_join(prepareThreadId, nullptr);
+        prepareThreadId = 0;
     }
-    if (pthread_kill(videoPlayId, 0) == 0) {
+    if (videoPlayId != 0 && pthread_kill(videoPlayId, 0) == 0) {
         pthread_join(videoPlayId, nullptr);
+        videoPlayId = 0;
     }
-    avcodec_free_context(&avCodecContext);
-    avcodec_free_context(&audioCodecContext);
-    avformat_free_context(avFormatContext);
+    if (avCodecContext != nullptr) {
+        avcodec_free_context(&avCodecContext);
+        avCodecContext = nullptr;
+    }
+    if (audioCodecContext != nullptr) {
+        avcodec_free_context(&audioCodecContext);
+        audioCodecContext = nullptr;
+    }
+    if (avFormatContext != nullptr) {
+        avformat_free_context(avFormatContext);
+        avFormatContext = nullptr;
+    }
     clear(audioPacketQueue);
     clear(videoPacketQueue);
     videoClock = 0;
@@ -330,6 +383,13 @@ void BipPlayer::prepare() {
     avFormatContext = avformat_alloc_context();
     AVDictionary *dic = nullptr;
     av_dict_set(&dic, "bufsize", "655360", 0);
+    std::map<const char *, const char *>::iterator iterator;
+    iterator = formatOps.begin();
+    while (iterator != formatOps.end()) {
+        LOGE("prepare with format option %s:%s", iterator->first, iterator->second);
+        av_dict_set(&dic, iterator->first, iterator->second, 0);
+        iterator++;
+    }
 //    av_dict_set(&dic,"stimeout","2000000",0);
     int prepareResult;
     char *errorMsg = static_cast<char *>(av_malloc(1024));
@@ -337,16 +397,16 @@ void BipPlayer::prepare() {
     if (prepareResult != 0) {
         playState = STATE_ERROR;
         postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
-        av_strerror(prepareResult,errorMsg,1024);
-        LOGE("open input error %s",errorMsg);
+        av_strerror(prepareResult, errorMsg, 1024);
+        LOGE("open input error %s", errorMsg);
         return;
     }
     prepareResult = avformat_find_stream_info(avFormatContext, nullptr);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
         postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
-        av_strerror(prepareResult,errorMsg,1024);
-        LOGE("find stream info error %s",errorMsg);
+        av_strerror(prepareResult, errorMsg, 1024);
+        LOGE("find stream info error %s", errorMsg);
         return;
     }
     duration = avFormatContext->duration / 1000;
@@ -360,12 +420,20 @@ void BipPlayer::prepare() {
             audioTimeBase = avFormatContext->streams[i]->time_base;
         }
     }
+    AVDictionary *codecDic = nullptr;
+    std::map<const char *, const char *>::iterator codecIterator;
+    codecIterator = codecOps.begin();
+    while (codecIterator != codecOps.end()) {
+        LOGE("prepare with codec option %s:%s", codecIterator->first, codecIterator->second);
+        av_dict_set(&codecDic, codecIterator->first, codecIterator->second, 0);
+        codecIterator++;
+    }
     //打开视频解码器
     AVCodec *avCodec = avcodec_find_decoder(
             avFormatContext->streams[video_index]->codecpar->codec_id);
     avCodecContext = avcodec_alloc_context3(avCodec);
     avcodec_parameters_to_context(avCodecContext, avFormatContext->streams[video_index]->codecpar);
-    if (avcodec_open2(avCodecContext, avCodec, nullptr) < 0) {
+    if (avcodec_open2(avCodecContext, avCodec, &codecDic) < 0) {
         return;
     }
     if (nativeWindow != nullptr) {
@@ -411,6 +479,15 @@ void BipPlayer::prepare() {
                                 avCodecContext->pix_fmt, avCodecContext->width,
                                 avCodecContext->height, AV_PIX_FMT_RGBA, SWS_BICUBIC,
                                 nullptr, nullptr, nullptr);
+    AVDictionary *swsDic = nullptr;
+    std::map<const char *, const char *>::iterator swsIterator;
+    swsIterator = swsOps.begin();
+    while (swsIterator != swsOps.end()) {
+        LOGE("prepare with sws option %s:%s", swsIterator->first, swsIterator->second);
+        av_dict_set(&swsDic, swsIterator->first, swsIterator->second, 0);
+        swsIterator++;
+    }
+    av_opt_set_dict(swsContext, &swsDic);
 
 
     //解码
@@ -436,8 +513,7 @@ void BipPlayer::prepare() {
                 if (videoCache > 100 && audioCache > 100) {
                     videoCache = -1;
                     audioCache = -1;
-                    playState = STATE_PREPARED;
-                    postEventFromNative(MEDIA_PREPARED, 0, 0, nullptr);
+                    notifyPrepared();
                 }
             } else if (packet->stream_index == audio_index) {
                 auto *audioPacket = (AVPacket *) av_mallocz(sizeof(AVPacket));
@@ -454,8 +530,7 @@ void BipPlayer::prepare() {
                 if (videoCache > 100 && audioCache > 100) {
                     videoCache = -1;
                     audioCache = -1;
-                    playState = STATE_PREPARED;
-                    postEventFromNative(MEDIA_PREPARED, 0, 0, nullptr);
+                    notifyPrepared();
                 }
             }
         } else {
@@ -464,6 +539,17 @@ void BipPlayer::prepare() {
         av_packet_unref(packet);
     }
     av_free(errorMsg);
+}
+
+void BipPlayer::notifyPrepared() {
+    playState = STATE_PREPARED;
+    postEventFromNative(MEDIA_PREPARED, 0, 0, nullptr);
+    auto iterator = playerOps.find("start-on-prepared");
+    if (iterator != playerOps.end()) {
+        if (iterator->second != nullptr && strcmp("1", iterator->second) == 0) {
+            start();
+        }
+    }
 }
 
 void BipPlayer::playAudio() {
@@ -490,7 +576,7 @@ long BipPlayer::getDuration() const {
 }
 
 long BipPlayer::getCurrentPosition() const {
-    return audioClock * 1000;
+    return (long) (audioClock * 1000);
 }
 
 int BipPlayer::getVideoHeight() const {
@@ -520,14 +606,14 @@ void BipPlayer::seekTo(long time) {
     if (playState >= STATE_PREPARED) {
         pthread_mutex_lock(&videoMutex);
         pthread_mutex_lock(&audioMutex);
-        av_seek_frame(avFormatContext, audio_index, time / av_q2d(audioTimeBase) / 1000,
+        av_seek_frame(avFormatContext, audio_index, (double) (time) / av_q2d(audioTimeBase) / 1000,
                       AVSEEK_FLAG_BACKWARD);
-        av_seek_frame(avFormatContext, video_index, time / av_q2d(videoTimeBase) / 1000,
+        av_seek_frame(avFormatContext, video_index, (double) (time) / av_q2d(videoTimeBase) / 1000,
                       AVSEEK_FLAG_BACKWARD);
         clear(videoPacketQueue);
         clear(audioPacketQueue);
-        audioClock = time / 1000;
-        videoClock = time / 1000;
+        audioClock = (double) (time) / 1000;
+        videoClock = (double) (time) / 1000;
         pthread_mutex_unlock(&audioMutex);
         pthread_mutex_unlock(&videoMutex);
         if (playState != STATE_PLAYING) {
@@ -575,7 +661,7 @@ void BipPlayer::start() {
         pthread_create(&audioPlayId, nullptr, playAudioThread, this);//开启begin线程
         pthread_create(&videoPlayId, nullptr, playVideoThread, this);//开启begin线程
     } else {
-        postEventFromNative(MEDIA_ERROR, ERROR_NOT_PREPARED, 0, nullptr);
+        postEventFromNative(MEDIA_ERROR, ERROR_NOT_PREPARED, 1, nullptr);
     }
 }
 

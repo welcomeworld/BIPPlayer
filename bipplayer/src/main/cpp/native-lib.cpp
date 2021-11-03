@@ -16,11 +16,24 @@ jint native_prepareAsync(JNIEnv *env, jobject instance, jstring inputPath_) {
 
 void setVideoSurface(JNIEnv *env, jobject instance, jobject surface) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->setVideoSurface(ANativeWindow_fromSurface(env, surface));
+    if (surface != nullptr) {
+        bipPlayer->setVideoSurface(ANativeWindow_fromSurface(env, surface));
+    } else {
+        bipPlayer->setVideoSurface(nullptr);
+    }
 }
 
-void native_setOption(JNIEnv *env, jobject instance, jint category, jstring key, jstring value) {
+void native_setOption(JNIEnv *env, jobject instance, jint category, jstring jkey, jstring jvalue) {
     auto *bipPlayer = getNativePlayer(env, instance);
+    const char *key = env->GetStringUTFChars(jkey, nullptr);
+    const char *value = env->GetStringUTFChars(jvalue, nullptr);
+    char *ckey = static_cast<char *>(malloc(strlen(key)));
+    char *cvalue = static_cast<char *>(malloc(strlen(value)));
+    strcpy(ckey, key);
+    strcpy(cvalue, value);
+    bipPlayer->setOption(category, ckey, cvalue);
+    env->ReleaseStringUTFChars(jkey, key);
+    env->ReleaseStringUTFChars(jvalue, value);
 }
 
 void native_setup(JNIEnv *env, jobject instance, jobject weak_this) {
