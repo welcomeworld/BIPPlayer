@@ -164,11 +164,11 @@ public:
     AVRational videoTimeBase;
     double videoClock;//视频时钟,单位秒
     pthread_t videoPlayId = 0;//视频处理线程id
-    AVFrame *rgb_frame;
+    AVFrame *rgb_frame = nullptr;
 
     //audio
     //音频解码上下文
-    AVCodecContext *audioCodecContext;
+    AVCodecContext *audioCodecContext = nullptr;
     //音频重采样上下文
     SwrContext *audioSwrContext;
     SLObjectItf engineObject;//用SLObjectItf声明引擎接口对象

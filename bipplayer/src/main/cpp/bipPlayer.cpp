@@ -25,7 +25,10 @@ void BipPlayer::release() {
         ANativeWindow_release(nativeWindow);
         nativeWindow = nullptr;
     }
-    av_frame_free(&rgb_frame);
+    if (rgb_frame != nullptr) {
+        av_frame_free(&rgb_frame);
+        rgb_frame = nullptr;
+    }
     pthread_cond_destroy(&videoCond);
     pthread_cond_destroy(&audioCond);
     pthread_mutex_destroy(&videoMutex);
@@ -297,8 +300,12 @@ void BipPlayer::postEventFromNative(int what, int arg1, int arg2, void *object) 
 
 void BipPlayer::stop() {
     if (playState <= STATE_ERROR) {
-        LOGE("stop with error state");
-        postEventFromNative(MEDIA_ERROR, ERROR_NOT_PREPARED, 0, nullptr);
+        if (playState == STATE_ERROR) {
+            reset();
+        } else {
+            LOGE("stop with error state");
+            postEventFromNative(MEDIA_ERROR, ERROR_NOT_PREPARED, 0, nullptr);
+        }
         return;
     }
     pthread_mutex_lock(&videoMutex);
