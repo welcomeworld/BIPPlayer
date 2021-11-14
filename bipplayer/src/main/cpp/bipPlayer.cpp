@@ -133,10 +133,11 @@ int BipPlayer::getPcm() {
             int receiveResult = avcodec_receive_frame(audioCodecContext, audioFrame);
             pthread_mutex_unlock(&audioMutex);
             if (!receiveResult) {
-                swr_convert(audioSwrContext, &audioBuffer, 44100 * 2,
-                            (const uint8_t **) (audioFrame->data), audioFrame->nb_samples);
+                int outSample = swr_convert(audioSwrContext, &audioBuffer, 4096,
+                                            (const uint8_t **) (audioFrame->data),
+                                            audioFrame->nb_samples);
                 int size = av_samples_get_buffer_size(nullptr, outChannelsNumber,
-                                                      audioFrame->nb_samples,
+                                                      outSample,
                                                       AV_SAMPLE_FMT_S16, 1);
                 if (audioFrame->pts != AV_NOPTS_VALUE) {
                     //这一帧的起始时间
@@ -458,9 +459,9 @@ void BipPlayer::prepare() {
 
     //申请音频的AVPacket和AVFrame
     audioSwrContext = swr_alloc();
-    audioBuffer = static_cast<uint8_t *>(av_mallocz(44100 * 2));
+    audioBuffer = static_cast<uint8_t *>(av_mallocz(4096 * 4));
     swr_alloc_set_opts(audioSwrContext, outChLayout, AV_SAMPLE_FMT_S16,
-                       audioCodecContext->sample_rate,
+                       44100,
                        audioCodecContext->channel_layout, audioCodecContext->sample_fmt,
                        audioCodecContext->sample_rate, 0,
                        nullptr);
