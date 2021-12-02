@@ -11,6 +11,7 @@
 #include <android/native_window_jni.h>
 #include <android/log.h>
 #include <map>
+#include <sys/prctl.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,7 +37,14 @@ extern jfieldID nativePlayerRefId;
 extern JavaVM *staticVm;
 
 void *prepareVideoThread(void *args);
+
 void clear(std::queue<AVPacket *> &q);
+
+void clear(std::queue<AVFrame *> &q);
+
+void *cacheVideoFrameThread(void *args);
+
+void *cacheAudioFrameThread(void *args);
 
 enum PlayerState {
     STATE_RELEASE = 0,
@@ -56,11 +64,9 @@ enum ErrorState {
     ERROR_PREPARE_FAILED
 };
 
-struct ptrCmp
-{
-    bool operator()( const char * s1, const char * s2 ) const
-    {
-        return strcmp( s1, s2 ) < 0;
+struct ptrCmp {
+    bool operator()(const char *s1, const char *s2) const {
+        return strcmp(s1, s2) < 0;
     }
 };
 
@@ -82,10 +88,13 @@ private:
     static const int OPT_CATEGORY_SWS = 3;
     static const int OPT_CATEGORY_PLAYER = 4;
 
-    std::map<const char*,const char*,ptrCmp> formatOps;
-    std::map<const char*,const char*,ptrCmp> codecOps;
-    std::map<const char*,const char*,ptrCmp> playerOps;
-    std::map<const char*,const char*,ptrCmp> swsOps;
+    int max_frame_buff_size = 100;
+    int min_frame_buff_size = 50;
+
+    std::map<const char *, const char *, ptrCmp> formatOps;
+    std::map<const char *, const char *, ptrCmp> codecOps;
+    std::map<const char *, const char *, ptrCmp> playerOps;
+    std::map<const char *, const char *, ptrCmp> swsOps;
 
     //创建引擎
     void createEngine();
@@ -101,6 +110,10 @@ private:
     void postEventFromNative(int what, int arg1, int arg2, void *object) const;
 
     void notifyPrepared();
+
+    void notifyCompleted();
+
+    void killAllThread();
 
 public:
 
@@ -136,7 +149,11 @@ public:
 
     void release();
 
-    void setOption(int category,const char *key, const char *value);
+    void setOption(int category, const char *key, const char *value);
+
+    void cacheVideo();
+
+    void cacheAudio();
 
     BipPlayer();
 
@@ -151,6 +168,7 @@ public:
     const char *inputPath;
     pthread_t prepareThreadId = 0;
     AVFormatContext *avFormatContext;
+    pthread_mutex_t avOpsMutex;
 
     //video
     AVCodecContext *avCodecContext = nullptr;
@@ -159,8 +177,13 @@ public:
     int video_index = -1;
     //视频Packet队列
     std::queue<AVPacket *> videoPacketQueue;
+    std::queue<AVFrame *> videoFrameQueue;
+    pthread_t cacheVideoThreadId = 0;
     pthread_mutex_t videoMutex;
     pthread_cond_t videoCond;
+    pthread_mutex_t videoFrameMutex;
+    pthread_cond_t videoFrameCond;
+    pthread_cond_t videoFrameEmptyCond;
     AVRational videoTimeBase;
     double videoClock;//视频时钟,单位秒
     pthread_t videoPlayId = 0;//视频处理线程id
@@ -181,8 +204,13 @@ public:
     SLAndroidSimpleBufferQueueItf slBufferQueueItf;//缓冲区队列接口
     //音频Packet队列
     std::queue<AVPacket *> audioPacketQueue;
+    std::queue<AVFrame *> audioFrameQueue;
+    pthread_t cacheAudioThreadId = 0;
     pthread_mutex_t audioMutex;
     pthread_cond_t audioCond;
+    pthread_mutex_t audioFrameMutex;
+    pthread_cond_t audioFrameCond;
+    pthread_cond_t audioFrameEmptyCond;
     //音频重采样缓冲区
     uint8_t *audioBuffer;
     //音频重采样声道

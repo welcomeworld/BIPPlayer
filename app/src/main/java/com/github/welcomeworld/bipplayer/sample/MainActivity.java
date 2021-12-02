@@ -72,9 +72,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
-//                bipPlayer.setDataSource(file.getAbsolutePath());
+                bipPlayer.setDataSource(file.getAbsolutePath());
 //                bipPlayer.setDataSource("http://stream4.iqilu.com/ksd/video/2020/02/17/c5e02420426d58521a8783e754e9f4e6.mp4");
-                bipPlayer.setDataSource("https://stream7.iqilu.com/10339/upload_transcode/202002/18/20200218114723HDu3hhxqIT.mp4");
+//                bipPlayer.setDataSource("https://stream7.iqilu.com/10339/upload_transcode/202002/18/20200218114723HDu3hhxqIT.mp4");
                 bipPlayer.prepareAsync();
             }
         });
