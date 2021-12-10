@@ -38,6 +38,8 @@ extern JavaVM *staticVm;
 
 void *prepareVideoThread(void *args);
 
+void *prepareNextVideoThread(void *args);
+
 void clear(std::queue<AVPacket *> &q);
 
 void clear(std::queue<AVFrame *> &q);
@@ -91,6 +93,12 @@ private:
     int max_frame_buff_size = 100;
     int min_frame_buff_size = 50;
 
+    bool nextIsDash = true;
+    std::queue<AVPacket *> nextVideoPacketQueue;
+    std::queue<AVFrame *> nextVideoFrameQueue;
+    std::queue<AVPacket *> nextAudioPacketQueue;
+    std::queue<AVFrame *> nextAudioFrameQueue;
+
     std::map<const char *, const char *, ptrCmp> formatOps;
     std::map<const char *, const char *, ptrCmp> codecOps;
     std::map<const char *, const char *, ptrCmp> playerOps;
@@ -113,7 +121,7 @@ private:
 
     void notifyCompleted();
 
-    void killAllThread();
+    void waitAllThreadStop();
 
 public:
 
@@ -155,6 +163,8 @@ public:
 
     void cacheAudio();
 
+    void prepareNext();
+
     BipPlayer();
 
     ~BipPlayer();
@@ -166,7 +176,10 @@ public:
     long duration = -1;//单位毫秒
     void *weakJavaThis;
     const char *inputPath;
+    char *nextInputPath;
+    char *dashInputPath;
     pthread_t prepareThreadId = 0;
+    pthread_t prepareNextThreadId = 0;
     AVFormatContext *avFormatContext;
     pthread_mutex_t avOpsMutex;
 

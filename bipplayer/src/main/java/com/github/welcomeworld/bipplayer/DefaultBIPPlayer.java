@@ -80,6 +80,8 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     private native void _release();
 
+    private native void _prepare_next(String path);
+
     @Override
     public native void start();
 
@@ -149,7 +151,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void prepareQualityAsync(String path) {
-
+        _prepare_next(path);
     }
 
     @Override

@@ -185,9 +185,9 @@ void BipPlayer::showVideoPacket() {
     , delay         //线程休眠时间
     , diff   //音频帧与视频帧相差时间
     , sync_threshold //合理的范围
-    , pts
-    , frame_time_stamp = av_q2d(videoTimeBase); //时间戳的实际时间单位
+    , pts;
     while (playState == STATE_PLAYING) {
+        double frame_time_stamp = av_q2d(videoTimeBase); //时间戳的实际时间单位
         pthread_mutex_lock(&videoFrameMutex);
         if (playState != STATE_PLAYING) {
             pthread_mutex_unlock(&videoFrameMutex);
@@ -326,7 +326,7 @@ void BipPlayer::stop() {
     pthread_mutex_unlock(&audioFrameMutex);
     pthread_cond_signal(&videoFrameEmptyCond);
     pthread_mutex_unlock(&videoFrameMutex);
-    killAllThread();
+    waitAllThreadStop();
     if (avCodecContext != nullptr) {
         avcodec_free_context(&avCodecContext);
         avCodecContext = nullptr;
@@ -365,7 +365,7 @@ void BipPlayer::reset() {
     pthread_mutex_unlock(&audioFrameMutex);
     pthread_cond_signal(&videoFrameEmptyCond);
     pthread_mutex_unlock(&videoFrameMutex);
-    killAllThread();
+    waitAllThreadStop();
     if (avCodecContext != nullptr) {
         avcodec_free_context(&avCodecContext);
         avCodecContext = nullptr;
@@ -677,6 +677,13 @@ void *prepareVideoThread(void *args) {
     pthread_exit(nullptr);//退出线程
 }
 
+void *prepareNextVideoThread(void *args) {
+    auto bipPlayer = (BipPlayer *) args;
+    pthread_setname_np(bipPlayer->prepareNextThreadId, "BipPrepareNext");
+    bipPlayer->prepareNext();
+    pthread_exit(nullptr);//退出线程
+}
+
 void *playAudioThread(void *args) {
     auto bipPlayer = (BipPlayer *) args;
     pthread_setname_np(bipPlayer->audioPlayId, "BipPlayAudio");
@@ -791,7 +798,7 @@ void *cacheAudioFrameThread(void *args) {
     pthread_exit(nullptr);//退出线程
 }
 
-void BipPlayer::killAllThread() {
+void BipPlayer::waitAllThreadStop() {
     if (prepareThreadId != 0 && pthread_kill(prepareThreadId, 0) == 0) {
         pthread_join(prepareThreadId, nullptr);
         prepareThreadId = 0;
@@ -808,6 +815,224 @@ void BipPlayer::killAllThread() {
         pthread_join(cacheVideoThreadId, nullptr);
         cacheVideoThreadId = 0;
     }
+}
+
+void BipPlayer::prepareNext() {
+    //打开输入流
+    AVFormatContext *nextAvFormatContext = avformat_alloc_context();
+    AVDictionary *dic = nullptr;
+    av_dict_set(&dic, "bufsize", "655360", 0);
+    std::map<const char *, const char *>::iterator iterator;
+    iterator = formatOps.begin();
+    while (iterator != formatOps.end()) {
+        LOGE("prepare next with format option %s:%s", iterator->first, iterator->second);
+        av_dict_set(&dic, iterator->first, iterator->second, 0);
+        iterator++;
+    }
+    int prepareResult;
+    char *errorMsg = static_cast<char *>(av_malloc(1024));
+    if (nextIsDash) {
+        prepareResult = avformat_open_input(&nextAvFormatContext, dashInputPath, nullptr, &dic);
+    } else {
+        prepareResult = avformat_open_input(&nextAvFormatContext, nextInputPath, nullptr, &dic);
+    }
+    if (prepareResult != 0) {
+        av_strerror(prepareResult, errorMsg, 1024);
+        LOGE("open next input error %s", errorMsg);
+        return;
+    }
+    prepareResult = avformat_find_stream_info(nextAvFormatContext, nullptr);
+    if (prepareResult != 0) {
+        av_strerror(prepareResult, errorMsg, 1024);
+        LOGE("find next stream info error %s", errorMsg);
+        return;
+    }
+
+    int nextVideoIndex = -1;
+    AVRational nextVideoTimeBase;
+    int nextAudioIndex = -1;
+    AVRational nextAudioTimeBase;
+    //找到视频流
+    for (int i = 0; i < nextAvFormatContext->nb_streams; ++i) {
+        if (nextAvFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            nextVideoIndex = i;
+            nextVideoTimeBase = nextAvFormatContext->streams[i]->time_base;
+        } else if (nextAvFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            nextAudioIndex = i;
+            nextAudioTimeBase = nextAvFormatContext->streams[i]->time_base;
+        }
+    }
+    AVDictionary *codecDic = nullptr;
+    std::map<const char *, const char *>::iterator codecIterator;
+    codecIterator = codecOps.begin();
+    while (codecIterator != codecOps.end()) {
+        LOGE("prepare next with codec option %s:%s", codecIterator->first, codecIterator->second);
+        av_dict_set(&codecDic, codecIterator->first, codecIterator->second, 0);
+        codecIterator++;
+    }
+    //打开视频解码器
+    AVCodec *avCodec = avcodec_find_decoder(
+            nextAvFormatContext->streams[nextVideoIndex]->codecpar->codec_id);
+    AVCodecContext *nextAvCodecContext = avcodec_alloc_context3(avCodec);
+    avcodec_parameters_to_context(nextAvCodecContext,
+                                  nextAvFormatContext->streams[nextVideoIndex]->codecpar);
+    if (avcodec_open2(nextAvCodecContext, avCodec, &codecDic) < 0) {
+        return;
+    }
+    //打开音频解码器
+    AVCodec *audioCodec = avcodec_find_decoder(
+            nextAvFormatContext->streams[nextAudioIndex]->codecpar->codec_id);
+    AVCodecContext *nextAudioCodecContext = avcodec_alloc_context3(audioCodec);
+    avcodec_parameters_to_context(nextAudioCodecContext,
+                                  nextAvFormatContext->streams[nextAudioIndex]->codecpar);
+    avcodec_open2(nextAudioCodecContext, audioCodec, nullptr);
+
+    //申请音频的AVPacket和AVFrame
+    SwrContext *nextAudioSwrContext = swr_alloc();
+    swr_alloc_set_opts(nextAudioSwrContext, outChLayout, AV_SAMPLE_FMT_S16,
+                       44100,
+                       nextAudioCodecContext->channel_layout, nextAudioCodecContext->sample_fmt,
+                       nextAudioCodecContext->sample_rate, 0,
+                       nullptr);
+    swr_init(nextAudioSwrContext);
+
+
+
+
+
+    //申请视频的AVPacket和AVFrame
+    AVFrame *nextRGBFrame = av_frame_alloc();
+    auto *out_buffer = (uint8_t *) av_malloc(
+            av_image_get_buffer_size(AV_PIX_FMT_RGBA, nextAvCodecContext->width,
+                                     nextAvCodecContext->height,
+                                     1));
+    av_image_fill_arrays(nextRGBFrame->data, nextRGBFrame->linesize, out_buffer, AV_PIX_FMT_RGBA,
+                         nextAvCodecContext->width, nextAvCodecContext->height, 1);
+
+    //转换上下文
+    SwsContext *nextSwsContext = sws_getContext(nextAvCodecContext->width,
+                                                nextAvCodecContext->height,
+                                                nextAvCodecContext->pix_fmt,
+                                                nextAvCodecContext->width,
+                                                nextAvCodecContext->height, AV_PIX_FMT_RGBA,
+                                                SWS_BICUBIC,
+                                                nullptr, nullptr, nullptr);
+    AVDictionary *swsDic = nullptr;
+    std::map<const char *, const char *>::iterator swsIterator;
+    swsIterator = swsOps.begin();
+    while (swsIterator != swsOps.end()) {
+        LOGE("prepare next with sws option %s:%s", swsIterator->first, swsIterator->second);
+        av_dict_set(&swsDic, swsIterator->first, swsIterator->second, 0);
+        swsIterator++;
+    }
+    av_opt_set_dict(nextSwsContext, &swsDic);
+
+
+    //解码
+    int readResult;
+    if (nextIsDash) {
+        double dashClock = audioClock + 1;
+        if (duration > (long) dashClock * 1000) {
+            av_seek_frame(nextAvFormatContext, nextAudioIndex,
+                          dashClock / av_q2d(nextAudioTimeBase),
+                          AVSEEK_FLAG_BACKWARD);
+            av_seek_frame(nextAvFormatContext, nextVideoIndex,
+                          dashClock / av_q2d(nextVideoTimeBase),
+                          AVSEEK_FLAG_BACKWARD);
+        }
+    }
+    while (playState > STATE_ERROR) {
+        auto *avPacket = av_packet_alloc();
+        readResult = av_read_frame(nextAvFormatContext, avPacket);
+        if (readResult >= 0) {
+            if (avPacket->stream_index == nextVideoIndex) {
+                if (nextVideoFrameQueue.size() >= min_frame_buff_size) {
+                    if (nextAudioFrameQueue.size() < min_frame_buff_size) {
+                        nextVideoPacketQueue.push(avPacket);
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                AVFrame *frame = av_frame_alloc();
+                avcodec_send_packet(nextAvCodecContext, avPacket);
+                int receiveResult = avcodec_receive_frame(nextAvCodecContext, frame);
+                av_packet_free(&avPacket);
+                if (!receiveResult) {
+                    nextVideoFrameQueue.push(frame);
+                }
+            } else if (avPacket->stream_index == nextAudioIndex) {
+                if (nextAudioFrameQueue.size() >= min_frame_buff_size) {
+                    if (nextVideoFrameQueue.size() < min_frame_buff_size) {
+                        nextAudioPacketQueue.push(avPacket);
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                AVFrame *frame = av_frame_alloc();
+                avcodec_send_packet(nextAudioCodecContext, avPacket);
+                int receiveResult = avcodec_receive_frame(nextAudioCodecContext, frame);
+                av_packet_free(&avPacket);
+                if (!receiveResult) {
+                    nextAudioFrameQueue.push(frame);
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    if (nextIsDash) {
+        pthread_mutex_lock(&avOpsMutex);
+        pthread_mutex_lock(&videoMutex);
+        pthread_mutex_lock(&audioMutex);
+        pthread_mutex_lock(&videoFrameMutex);
+        pthread_mutex_lock(&audioFrameMutex);
+        //切换播放器
+        if (nativeWindow != nullptr) {
+            //配置nativeWindow
+            ANativeWindow_setBuffersGeometry(nativeWindow, nextAvCodecContext->width,
+                                             nextAvCodecContext->height, WINDOW_FORMAT_RGBA_8888);
+        }
+        free((void *) inputPath);
+        inputPath = dashInputPath;
+        dashInputPath = nullptr;
+        avFormatContext = nextAvFormatContext;
+        video_index = nextVideoIndex;
+        videoTimeBase = nextVideoTimeBase;
+        audio_index = nextAudioIndex;
+        audioTimeBase = nextAudioTimeBase;
+        avCodecContext = nextAvCodecContext;
+        audioCodecContext = nextAudioCodecContext;
+        audioSwrContext = nextAudioSwrContext;
+        rgb_frame = nextRGBFrame;
+        swsContext = nextSwsContext;
+        duration = nextAvFormatContext->duration / 1000;
+        clear(videoPacketQueue);
+        clear(audioPacketQueue);
+        clear(videoFrameQueue);
+        clear(audioFrameQueue);
+        LOGE("change packet queue");
+        swap(videoPacketQueue, nextVideoPacketQueue);
+        swap(audioPacketQueue, nextAudioPacketQueue);
+        swap(videoFrameQueue, nextVideoFrameQueue);
+        swap(audioFrameQueue, nextAudioFrameQueue);
+        pthread_mutex_unlock(&avOpsMutex);
+        pthread_cond_signal(&audioCond);
+        pthread_mutex_unlock(&audioMutex);
+        pthread_cond_signal(&videoCond);
+        pthread_mutex_unlock(&videoMutex);
+        pthread_cond_signal(&audioFrameEmptyCond);
+        pthread_mutex_unlock(&audioFrameMutex);
+        pthread_cond_signal(&videoFrameEmptyCond);
+        pthread_mutex_unlock(&videoFrameMutex);
+    } else {
+        free((void *) inputPath);
+        inputPath = nextInputPath;
+        nextInputPath = nullptr;
+    }
+    //切换播放器完成
+    av_free(errorMsg);
 }
 
 

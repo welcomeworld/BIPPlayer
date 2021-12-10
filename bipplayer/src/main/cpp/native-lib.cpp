@@ -7,10 +7,12 @@ BipPlayer *getNativePlayer(JNIEnv *env, jobject instance) {
 jint native_prepareAsync(JNIEnv *env, jobject instance, jstring inputPath_) {
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    bipPlayer->inputPath = inputPath;
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
+    strcpy(cinputPath, inputPath);
+    bipPlayer->inputPath = cinputPath;
     pthread_create(&(bipPlayer->prepareThreadId), nullptr, prepareVideoThread,
                    bipPlayer);//开启begin线程
-//    env->ReleaseStringUTFChars(inputPath_, inputPath);
+    env->ReleaseStringUTFChars(inputPath_, inputPath);
     return 0;
 }
 
@@ -105,6 +107,17 @@ void native_finalize(JNIEnv *env, jobject instance) {
     delete bipPlayer;
 }
 
+void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_) {
+    auto *bipPlayer = getNativePlayer(env, instance);
+    const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
+    strcpy(cinputPath, inputPath);
+    bipPlayer->dashInputPath = cinputPath;
+    pthread_create(&(bipPlayer->prepareNextThreadId), nullptr, prepareNextVideoThread,
+                   bipPlayer);//开启begin线程
+    env->ReleaseStringUTFChars(inputPath_, inputPath);
+}
+
 static JNINativeMethod methods[] = {
         {"_prepareAsync",      "(Ljava/lang/String;)I",                    (void *) native_prepareAsync},
         {"_setVideoSurface",   "(Landroid/view/Surface;)V",                (void *) setVideoSurface},
@@ -121,7 +134,8 @@ static JNINativeMethod methods[] = {
         {"_reset",             "()V",                                      (void *) native_reset},
         {"_release",           "()V",                                      (void *) native_release},
         {"native_finalize",    "()V",                                      (void *) native_finalize},
-        {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V", (void *) native_setOption}
+        {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V", (void *) native_setOption},
+        {"_prepare_next",      "(Ljava/lang/String;)V",                    (void *) native_prepare_next}
 };
 
 void loadJavaId(JNIEnv *env) {
