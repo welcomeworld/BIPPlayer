@@ -539,6 +539,13 @@ void BipPlayer::prepare() {
                     audioCache = -1;
                     notifyPrepared();
                 }
+                if(duration>0){
+                    int percent = round(avPacket->pts * av_q2d(audioTimeBase)*100000/duration);
+                    if(percent!=bufferPercent){
+                        bufferPercent = percent;
+                        postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
+                    }
+                }
             }
         } else {
             av_usleep(5000);

@@ -92,6 +92,7 @@ private:
 
     int max_frame_buff_size = 100;
     int min_frame_buff_size = 50;
+    int bufferPercent = 0;
 
     bool nextIsDash = true;
     std::queue<AVPacket *> nextVideoPacketQueue;
