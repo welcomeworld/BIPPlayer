@@ -72,33 +72,36 @@ jboolean isPlaying(JNIEnv *env, jobject instance) {
 
 void native_seekTo(JNIEnv *env, jobject instance, jlong time) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->seekTo(time);
+    auto *message = new BIPMessage();
+    message->what = MSG_SEEK;
+    message->arg1 = time;
+    bipPlayer->notifyMsg(message);
 }
 
 void native_stop(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->stop();
+    bipPlayer->notifyMsg(MSG_STOP);
 }
 
 void native_pause(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->pause();
-
+    bipPlayer->notifyMsg(MSG_PAUSE);
 }
 
 void native_start(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->start();
+    bipPlayer->notifyMsg(MSG_START);
 }
 
 void native_reset(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->reset();
+    bipPlayer->notifyMsg(MSG_RESET);
+
 }
 
 void native_release(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->release();
+    bipPlayer->notifyMsg(MSG_RELEASE);
 }
 
 void native_finalize(JNIEnv *env, jobject instance) {

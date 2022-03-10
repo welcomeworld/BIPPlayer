@@ -48,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         checkPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT,"allowed_extensions","ALL");
+        bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT, "reconnect", "1");
         bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", "1");
         bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT, "user_agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36");
         binding.surface.getHolder().addCallback(new SurfaceHolder.Callback() {
@@ -64,6 +66,16 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
 
+            }
+        });
+        bipPlayer.setOnInfoListener((bp, what, extra) -> {
+            switch (what){
+                case 0:
+                    binding.buffering.setVisibility(View.VISIBLE);
+                    break;
+                case 1:
+                    binding.buffering.setVisibility(View.GONE);
+                    break;
             }
         });
         bipPlayer.setDisplay(binding.surface.getHolder());
@@ -119,8 +131,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         new Thread(() -> {
-            while (true) {
+            while (bipPlayer != null) {
                 runOnUiThread(() -> {
+                    if (bipPlayer == null) {
+                        return;
+                    }
                     long position = bipPlayer.getCurrentPosition();
                     long duration = bipPlayer.getDuration();
                     binding.position.setText(formatTime(position));

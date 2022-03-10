@@ -40,6 +40,10 @@ public interface BIPPlayer {
         void onBufferingUpdate(BIPPlayer bp, int var2);
     }
 
+    interface OnInfoListener {
+        void onInfo(BIPPlayer bp, int what, int extra);
+    }
+
     void stop();
 
     boolean isPlaying();
@@ -69,4 +73,6 @@ public interface BIPPlayer {
     void setOnBufferingUpdateListener(OnBufferingUpdateListener listener);
 
     void setOption(int category, String name, String value);
+
+    void setOnInfoListener(OnInfoListener listener);
 }

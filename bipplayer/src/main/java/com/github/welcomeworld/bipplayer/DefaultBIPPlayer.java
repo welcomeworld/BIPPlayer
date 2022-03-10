@@ -26,6 +26,9 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     public static final int OPT_CATEGORY_SWS = 3;
     public static final int OPT_CATEGORY_PLAYER = 4;
 
+    private static final int MEDIA_INFO_BUFFERING_START = 0;
+    private static final int MEDIA_INFO_BUFFERING_END = 1;
+
     private SurfaceHolder mSurfaceHolder;
     private boolean mScreenOnWhilePlaying = true;
     private String mDataSource;
@@ -35,6 +38,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     private OnBufferingUpdateListener mOnBufferingUpdateListener;
     private OnSeekCompleteListener mOnSeekCompleteListener;
     private OnErrorListener mOnErrorListener;
+    private OnInfoListener mOnInfoListener;
     @SuppressWarnings("unused")
     private long nativePlayerRef;
     private boolean isPlaying;
@@ -169,9 +173,18 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         mOnErrorListener = listener;
     }
 
+    public void setOnInfoListener(OnInfoListener listener) {
+        mOnInfoListener = listener;
+    }
+
     protected final void notifyOnError(int what, int extra) {
         if (mOnErrorListener != null)
             mOnErrorListener.onError(this, what, extra);
+    }
+
+    protected final void notifyOnInfo(int what, int extra) {
+        if (mOnInfoListener != null)
+            mOnInfoListener.onInfo(this, what, extra);
     }
 
     @Override
@@ -247,6 +260,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
                     bip.setPlaying(msg.arg1 == 1);
                     break;
                 case MEDIA_INFO:
+                    bip.notifyOnInfo(msg.arg1,msg.arg2);
                     break;
                 case MEDIA_PLAYER_MESSAGE:
                     break;
@@ -278,6 +292,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         mOnCompletionListener = null;
         mOnPreparedListener = null;
         mOnErrorListener = null;
+        mOnInfoListener = null;
     }
 
     @Override

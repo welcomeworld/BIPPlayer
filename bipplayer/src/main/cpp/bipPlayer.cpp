@@ -8,6 +8,8 @@ jmethodID postEventFromNativeMethodId;
 jfieldID nativePlayerRefId;
 JavaVM *staticVm;
 
+void *bipMsgLoopThread(void *args);
+
 bool javaExceptionCheckCatchAll(JNIEnv *env) {
     if (env->ExceptionCheck()) {
         env->ExceptionDescribe();
@@ -44,11 +46,13 @@ void BipPlayer::release() {
     pthread_cond_destroy(&videoFrameCond);
     pthread_cond_destroy(&audioFrameEmptyCond);
     pthread_cond_destroy(&videoFrameEmptyCond);
+    pthread_cond_destroy(&msgCond);
     pthread_mutex_destroy(&videoMutex);
     pthread_mutex_destroy(&audioMutex);
     pthread_mutex_destroy(&audioFrameMutex);
     pthread_mutex_destroy(&videoFrameMutex);
     pthread_mutex_destroy(&avOpsMutex);
+    pthread_mutex_destroy(&msgMutex);
 }
 
 //创建混音器
@@ -133,20 +137,31 @@ void BipPlayer::innerBufferQueueCallback() {
 
 int BipPlayer::getPcm() {
     while (playState == STATE_PLAYING) {
+        LOGD("audio play wait frame lock");
         pthread_mutex_lock(&audioFrameMutex);
+        LOGD("audio play get frame lock success");
         if (playState != STATE_PLAYING) {
             pthread_mutex_unlock(&audioFrameMutex);
             break;
         }
         if (audioFrameQueue.empty()) {
-            pthread_cond_wait(&audioFrameCond, &audioFrameMutex);
+            if (FFABS(baseClock * 1000 - duration) < 500) {
+                notifyCompleted();
+            } else {
+                if (!interruptContext->audioBuffering) {
+                    notifyInfo(MEDIA_INFO_BUFFERING_START);
+                    interruptContext->audioBuffering = true;
+                }
+                LOGW("audio play empty wait");
+                pthread_cond_wait(&audioFrameCond, &audioFrameMutex);
+                LOGW("audio play empty wait success");
+            }
         }
         if (!audioFrameQueue.empty() && playState == STATE_PLAYING) {
             AVFrame *audioFrame = audioFrameQueue.front();
             audioFrameQueue.pop();
-            if (audioFrameQueue.size() <= min_frame_buff_size) {
-                pthread_cond_signal(&audioFrameEmptyCond);
-            }
+            interruptContext->audioSize = audioFrameQueue.size();
+            pthread_cond_signal(&audioFrameEmptyCond);
             pthread_mutex_unlock(&audioFrameMutex);
             if (audioSwrContext == nullptr) {
                 return 0;
@@ -164,6 +179,7 @@ int BipPlayer::getPcm() {
                 double time = size / ((double) 44100 * 2 * 2);
                 //最终音频时钟
                 audioClock = time + audioClock;
+                baseClock = audioClock;
 
             }
             av_frame_free(&audioFrame);
@@ -172,6 +188,7 @@ int BipPlayer::getPcm() {
             pthread_mutex_unlock(&audioFrameMutex);
         }
     }
+    LOGW("audio play return 0");
     return 0;
 }
 
@@ -188,24 +205,27 @@ void BipPlayer::showVideoPacket() {
     , pts;
     while (playState == STATE_PLAYING) {
         double frame_time_stamp = av_q2d(videoTimeBase); //时间戳的实际时间单位
+        LOGD("video show wait frame lock");
         pthread_mutex_lock(&videoFrameMutex);
+        LOGD("video show get frame lock success");
         if (playState != STATE_PLAYING) {
             pthread_mutex_unlock(&videoFrameMutex);
             break;
         }
         if (videoFrameQueue.empty()) {
-            if (FFABS(audioClock * 1000 - duration) < 500) {
-                notifyCompleted();
+            if (FFABS(baseClock * 1000 - duration) < 500) {
+                break;
             } else {
+                LOGW("video show empty wait");
                 pthread_cond_wait(&videoFrameCond, &videoFrameMutex);
+                LOGW("video show empty wait success");
             }
         }
         if (!videoFrameQueue.empty()) {
             AVFrame *frame = videoFrameQueue.front();
             videoFrameQueue.pop();
-            if (videoFrameQueue.size() <= min_frame_buff_size) {
-                pthread_cond_signal(&videoFrameEmptyCond);
-            }
+            interruptContext->videoSize = videoFrameQueue.size();
+            pthread_cond_signal(&videoFrameEmptyCond);
             pthread_mutex_unlock(&videoFrameMutex);
             if ((pts = frame->best_effort_timestamp) == AV_NOPTS_VALUE) {
                 pts = videoClock;
@@ -214,7 +234,10 @@ void BipPlayer::showVideoPacket() {
             videoClock =
                     play + (frame->repeat_pict * 0.5 * frame_time_stamp + frame_time_stamp);
             delay = play - last_play;
-            diff = videoClock - audioClock;
+            if (!audioAvailable()) {
+                baseClock = videoClock;
+            }
+            diff = videoClock - baseClock;
             sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN, FFMIN(AV_SYNC_THRESHOLD_MAX, delay));
             if (fabs(diff) < 10) {
                 if (diff <= -sync_threshold) {
@@ -273,7 +296,7 @@ void BipPlayer::setVideoSurface(ANativeWindow *window) {
         nativeWindow = nullptr;
     }
     nativeWindow = window;
-    LOGE("set Surface with window %d", nativeWindow);
+    LOGE("set Surface with window %p", nativeWindow);
     if (avCodecContext != nullptr && nativeWindow != nullptr) {
         //配置nativeWindow
         ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
@@ -316,6 +339,7 @@ void BipPlayer::stop() {
     pthread_mutex_lock(&audioMutex);
     pthread_mutex_lock(&videoFrameMutex);
     pthread_mutex_lock(&audioFrameMutex);
+    LOGE("process stop");
     playState = STATE_UN_DEFINE;
     (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_STOPPED);
     pthread_cond_signal(&audioCond);
@@ -323,8 +347,10 @@ void BipPlayer::stop() {
     pthread_cond_signal(&videoCond);
     pthread_mutex_unlock(&videoMutex);
     pthread_cond_signal(&audioFrameEmptyCond);
+    pthread_cond_signal(&audioFrameCond);
     pthread_mutex_unlock(&audioFrameMutex);
     pthread_cond_signal(&videoFrameEmptyCond);
+    pthread_cond_signal(&videoFrameCond);
     pthread_mutex_unlock(&videoFrameMutex);
     waitAllThreadStop();
     if (avCodecContext != nullptr) {
@@ -345,6 +371,7 @@ void BipPlayer::stop() {
     clear(audioFrameQueue);
     videoClock = 0;
     audioClock = 0;
+    LOGE("process stop completed");
 }
 
 void BipPlayer::reset() {
@@ -355,6 +382,7 @@ void BipPlayer::reset() {
     pthread_mutex_lock(&audioMutex);
     pthread_mutex_lock(&videoFrameMutex);
     pthread_mutex_lock(&audioFrameMutex);
+    LOGE("process reset");
     playState = STATE_UN_DEFINE;
     (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_STOPPED);
     pthread_cond_signal(&audioCond);
@@ -362,8 +390,10 @@ void BipPlayer::reset() {
     pthread_cond_signal(&videoCond);
     pthread_mutex_unlock(&videoMutex);
     pthread_cond_signal(&audioFrameEmptyCond);
+    pthread_cond_signal(&audioFrameCond);
     pthread_mutex_unlock(&audioFrameMutex);
     pthread_cond_signal(&videoFrameEmptyCond);
+    pthread_cond_signal(&videoFrameCond);
     pthread_mutex_unlock(&videoFrameMutex);
     waitAllThreadStop();
     if (avCodecContext != nullptr) {
@@ -386,14 +416,45 @@ void BipPlayer::reset() {
     audioClock = 0;
 }
 
+int avFormatInterrupt(void *ctx) {
+    auto interruptContext = (InterruptContext *) ctx;
+    timeval currentTime{};
+    gettimeofday(&currentTime, nullptr);
+    long diffTime = (currentTime.tv_sec - interruptContext->readStartTime.tv_sec) * 1000 +
+                    (currentTime.tv_usec - interruptContext->readStartTime.tv_usec) / 1000;
+    if (interruptContext->readStartTime.tv_sec != 0) {
+        if ((interruptContext->audioSize <= MIN_FRAME_BUFF_SIZE ||
+             interruptContext->videoSize <= MIN_FRAME_BUFF_SIZE)) {
+            if (interruptContext->audioBuffering) {
+                if (diffTime > 255) {
+                    LOGE("DefaultBIPPlayerNative interrupt because buffering with %ld time out",
+                         diffTime);
+                    return 1;
+                }
+            } else if (diffTime > 35) {
+                LOGE("DefaultBIPPlayerNative interrupt because ui with %ld time out", diffTime);
+                return 1;
+            }
+        } else if (diffTime > 355) {
+            LOGE("DefaultBIPPlayerNative interrupt because %ld time out", diffTime);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void BipPlayer::prepare() {
     if (playState != STATE_UN_DEFINE) {
         postEventFromNative(MEDIA_ERROR, ERROR_STATE_ILLEGAL, 0, nullptr);
         return;
     }
+    LOGE("start prepare %s", inputPath);
     playState = STATE_PREPARING;
     //打开输入流
     avFormatContext = avformat_alloc_context();
+    interruptContext->reset();
+    avFormatContext->interrupt_callback.callback = avFormatInterrupt;
+    avFormatContext->interrupt_callback.opaque = interruptContext;
     AVDictionary *dic = nullptr;
     av_dict_set(&dic, "bufsize", "655360", 0);
     std::map<const char *, const char *>::iterator iterator;
@@ -422,54 +483,75 @@ void BipPlayer::prepare() {
         return;
     }
     duration = avFormatContext->duration / 1000;
+    video_index = -1;
+    audio_index = -1;
     //找到视频流
     for (int i = 0; i < avFormatContext->nb_streams; ++i) {
         if (avFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            LOGE("find video stream with index %d", i);
             video_index = i;
             videoTimeBase = avFormatContext->streams[i]->time_base;
         } else if (avFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            LOGE("find audio stream with index %d", i);
             audio_index = i;
             audioTimeBase = avFormatContext->streams[i]->time_base;
         }
     }
-    AVDictionary *codecDic = nullptr;
-    std::map<const char *, const char *>::iterator codecIterator;
-    codecIterator = codecOps.begin();
-    while (codecIterator != codecOps.end()) {
-        LOGE("prepare with codec option %s:%s", codecIterator->first, codecIterator->second);
-        av_dict_set(&codecDic, codecIterator->first, codecIterator->second, 0);
-        codecIterator++;
+    //找得到视频流
+    if (videoAvailable()) {
+        AVDictionary *codecDic = nullptr;
+        std::map<const char *, const char *>::iterator codecIterator;
+        codecIterator = codecOps.begin();
+        while (codecIterator != codecOps.end()) {
+            LOGE("prepare with codec option %s:%s", codecIterator->first, codecIterator->second);
+            av_dict_set(&codecDic, codecIterator->first, codecIterator->second, 0);
+            codecIterator++;
+        }
+        //打开视频解码器
+        AVCodec *avCodec = avcodec_find_decoder(
+                avFormatContext->streams[video_index]->codecpar->codec_id);
+        avCodecContext = avcodec_alloc_context3(avCodec);
+        avcodec_parameters_to_context(avCodecContext,
+                                      avFormatContext->streams[video_index]->codecpar);
+        prepareResult = avcodec_open2(avCodecContext, avCodec, &codecDic);
+        if (prepareResult != 0) {
+            LOGE("打开解码失败");
+            playState = STATE_ERROR;
+            postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
+            return;
+        }
+        if (avCodecContext->pix_fmt == -1 || avCodecContext->width == 0 ||
+            avCodecContext->height == 0) {
+            LOGE("解码格式出错");
+            playState = STATE_ERROR;
+            postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, 233, nullptr);
+            return;
+        }
+        if (nativeWindow != nullptr) {
+            //配置nativeWindow
+            ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
+                                             avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
+        }
     }
-    //打开视频解码器
-    AVCodec *avCodec = avcodec_find_decoder(
-            avFormatContext->streams[video_index]->codecpar->codec_id);
-    avCodecContext = avcodec_alloc_context3(avCodec);
-    avcodec_parameters_to_context(avCodecContext, avFormatContext->streams[video_index]->codecpar);
-    if (avcodec_open2(avCodecContext, avCodec, &codecDic) < 0) {
-        return;
+    //找得到音频流
+    if (audioAvailable()) {
+        //打开音频解码器
+        AVCodec *audioCodec = avcodec_find_decoder(
+                avFormatContext->streams[audio_index]->codecpar->codec_id);
+        audioCodecContext = avcodec_alloc_context3(audioCodec);
+        avcodec_parameters_to_context(audioCodecContext,
+                                      avFormatContext->streams[audio_index]->codecpar);
+        avcodec_open2(audioCodecContext, audioCodec, nullptr);
+        //申请音频的AVPacket和AVFrame
+        audioSwrContext = swr_alloc();
+        swr_alloc_set_opts(audioSwrContext, outChLayout, AV_SAMPLE_FMT_S16,
+                           44100,
+                           audioCodecContext->channel_layout, audioCodecContext->sample_fmt,
+                           audioCodecContext->sample_rate, 0,
+                           nullptr);
+        swr_init(audioSwrContext);
     }
-    if (nativeWindow != nullptr) {
-        //配置nativeWindow
-        ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
-                                         avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
-    }
-    //打开音频解码器
-    AVCodec *audioCodec = avcodec_find_decoder(
-            avFormatContext->streams[audio_index]->codecpar->codec_id);
-    audioCodecContext = avcodec_alloc_context3(audioCodec);
-    avcodec_parameters_to_context(audioCodecContext,
-                                  avFormatContext->streams[audio_index]->codecpar);
-    avcodec_open2(audioCodecContext, audioCodec, nullptr);
-
-    //申请音频的AVPacket和AVFrame
-    audioSwrContext = swr_alloc();
     audioBuffer = static_cast<uint8_t *>(av_mallocz(4096 * 4));
-    swr_alloc_set_opts(audioSwrContext, outChLayout, AV_SAMPLE_FMT_S16,
-                       44100,
-                       audioCodecContext->channel_layout, audioCodecContext->sample_fmt,
-                       audioCodecContext->sample_rate, 0,
-                       nullptr);
-    swr_init(audioSwrContext);
     outChannelsNumber = av_get_channel_layout_nb_channels(outChLayout);
 
 
@@ -478,28 +560,32 @@ void BipPlayer::prepare() {
 
     //申请视频的AVPacket和AVFrame
     rgb_frame = av_frame_alloc();
-    auto *out_buffer = (uint8_t *) av_malloc(
-            av_image_get_buffer_size(AV_PIX_FMT_RGBA, avCodecContext->width, avCodecContext->height,
-                                     1));
-    av_image_fill_arrays(rgb_frame->data, rgb_frame->linesize, out_buffer, AV_PIX_FMT_RGBA,
-                         avCodecContext->width, avCodecContext->height, 1);
+    if (videoAvailable()) {
+        auto *out_buffer = (uint8_t *) av_malloc(
+                av_image_get_buffer_size(AV_PIX_FMT_RGBA, avCodecContext->width,
+                                         avCodecContext->height,
+                                         1));
+        av_image_fill_arrays(rgb_frame->data, rgb_frame->linesize, out_buffer, AV_PIX_FMT_RGBA,
+                             avCodecContext->width, avCodecContext->height, 1);
 
-    //转换上下文
-    swsContext = sws_getContext(avCodecContext->width, avCodecContext->height,
-                                avCodecContext->pix_fmt, avCodecContext->width,
-                                avCodecContext->height, AV_PIX_FMT_RGBA, SWS_BICUBIC,
-                                nullptr, nullptr, nullptr);
-    AVDictionary *swsDic = nullptr;
-    std::map<const char *, const char *>::iterator swsIterator;
-    swsIterator = swsOps.begin();
-    while (swsIterator != swsOps.end()) {
-        LOGE("prepare with sws option %s:%s", swsIterator->first, swsIterator->second);
-        av_dict_set(&swsDic, swsIterator->first, swsIterator->second, 0);
-        swsIterator++;
+        LOGE("start get swsContext from %d : %d : %d", avCodecContext->pix_fmt,
+             avCodecContext->codec_id, avCodecContext->coded_height);
+        //转换上下文
+        swsContext = sws_getContext(avCodecContext->width, avCodecContext->height,
+                                    avCodecContext->pix_fmt, avCodecContext->width,
+                                    avCodecContext->height, AV_PIX_FMT_RGBA, SWS_BICUBIC,
+                                    nullptr, nullptr, nullptr);
+        LOGE("get swsContext success from %d", avCodecContext->pix_fmt);
+        AVDictionary *swsDic = nullptr;
+        std::map<const char *, const char *>::iterator swsIterator;
+        swsIterator = swsOps.begin();
+        while (swsIterator != swsOps.end()) {
+            LOGE("prepare with sws option %s:%s", swsIterator->first, swsIterator->second);
+            av_dict_set(&swsDic, swsIterator->first, swsIterator->second, 0);
+            swsIterator++;
+        }
+        av_opt_set_dict(swsContext, &swsDic);
     }
-    av_opt_set_dict(swsContext, &swsDic);
-
-
     //解码
     int readResult;
     int videoCache = 0;
@@ -507,50 +593,68 @@ void BipPlayer::prepare() {
     playState = STATE_BUFFERING;
     pthread_create(&cacheVideoThreadId, nullptr, cacheVideoFrameThread, this);
     pthread_create(&cacheAudioThreadId, nullptr, cacheAudioFrameThread, this);
+    notifyInfo(MEDIA_INFO_BUFFERING_START);
+    interruptContext->audioBuffering = true;
     while (playState > STATE_ERROR) {
+        LOGD("prepare wait lock");
         pthread_mutex_lock(&avOpsMutex);
+        LOGD("prepare wait lock success");
         auto *avPacket = av_packet_alloc();
+        gettimeofday(&(interruptContext->readStartTime), nullptr);
         readResult = av_read_frame(avFormatContext, avPacket);
         pthread_mutex_unlock(&avOpsMutex);
         if (readResult >= 0) {
             if (avPacket->stream_index == video_index) {
+                LOGD("prepare video wait lock");
                 pthread_mutex_lock(&videoMutex);
+                LOGD("prepare video wait lock success");
                 videoPacketQueue.push(avPacket);
                 pthread_cond_signal(&videoCond);
                 pthread_mutex_unlock(&videoMutex);
                 if (videoCache != -1) {
                     videoCache++;
                 }
-                if (videoCache > 100 && audioCache > 100) {
+                if (videoCache > 50 && (!audioAvailable() || audioCache > 50)) {
                     videoCache = -1;
                     audioCache = -1;
                     notifyPrepared();
                 }
+                if (!audioAvailable()) {
+                    if (duration > 0) {
+                        int percent = round(
+                                avPacket->pts * av_q2d(videoTimeBase) * 100000 / duration);
+                        if (percent != bufferPercent) {
+                            bufferPercent = percent;
+                            postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
+                        }
+                    }
+                }
             } else if (avPacket->stream_index == audio_index) {
+                LOGD("prepare audio wait lock");
                 pthread_mutex_lock(&audioMutex);
+                LOGD("prepare audio wait lock success");
                 audioPacketQueue.push(avPacket);
                 pthread_cond_signal(&audioCond);
                 pthread_mutex_unlock(&audioMutex);
                 if (audioCache != -1) {
                     audioCache++;
                 }
-                if (videoCache > 100 && audioCache > 100) {
+                if (audioCache > 50 && (!videoAvailable() || videoCache > 50)) {
                     videoCache = -1;
                     audioCache = -1;
                     notifyPrepared();
                 }
-                if(duration>0){
-                    int percent = round(avPacket->pts * av_q2d(audioTimeBase)*100000/duration);
-                    if(percent!=bufferPercent){
+                if (duration > 0) {
+                    int percent = round(avPacket->pts * av_q2d(audioTimeBase) * 100000 / duration);
+                    if (percent != bufferPercent) {
                         bufferPercent = percent;
                         postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
                     }
                 }
             }
         } else {
-            av_usleep(5000);
+            av_usleep(50000);
         }
-//        av_packet_unref(packet);
     }
     av_free(errorMsg);
 }
@@ -567,8 +671,14 @@ void BipPlayer::notifyPrepared() {
 }
 
 void BipPlayer::notifyCompleted() {
-    playState = STATE_COMPLETED;
-    postEventFromNative(MEDIA_PLAYBACK_COMPLETE, 0, 0, nullptr);
+    if (playState != STATE_COMPLETED) {
+        playState = STATE_COMPLETED;
+        postEventFromNative(MEDIA_PLAYBACK_COMPLETE, 0, 0, nullptr);
+    }
+}
+
+void BipPlayer::notifyInfo(int info) {
+    postEventFromNative(MEDIA_INFO, info, 0, nullptr);
 }
 
 void BipPlayer::playAudio() {
@@ -577,6 +687,10 @@ void BipPlayer::playAudio() {
 }
 
 BipPlayer::BipPlayer() {
+    LOGE("avFormatConfiguration:%s", avformat_configuration());
+    LOGE("avCodecConfiguration:%s", avcodec_configuration());
+    interruptContext = new InterruptContext();
+    nextInterruptContext = new InterruptContext;
     createEngine();
     createMixVolume();
     createPlayer();
@@ -591,10 +705,15 @@ BipPlayer::BipPlayer() {
     pthread_mutex_init(&avOpsMutex, nullptr);
     pthread_cond_init(&audioFrameEmptyCond, nullptr);
     pthread_cond_init(&videoFrameEmptyCond, nullptr);
+    pthread_mutex_init(&msgMutex, nullptr);
+    pthread_cond_init(&msgCond, nullptr);
+    pthread_create(&msgLoopThreadId, nullptr, bipMsgLoopThread, this);//开启消息线程
 };
 
 BipPlayer::~BipPlayer() {
     release();
+    delete interruptContext;
+    delete nextInterruptContext;
 };
 
 long BipPlayer::getDuration() const {
@@ -641,21 +760,31 @@ void clear(std::queue<AVFrame *> &q) {
 
 void BipPlayer::seekTo(long time) {
     if (playState >= STATE_PREPARED) {
+        audioClock = (double) (time) / 1000;
+        videoClock = (double) (time) / 1000;
+        pthread_mutex_lock(&avOpsMutex);
         pthread_mutex_lock(&videoMutex);
         pthread_mutex_lock(&audioMutex);
         pthread_mutex_lock(&videoFrameMutex);
         pthread_mutex_lock(&audioFrameMutex);
-        pthread_mutex_lock(&avOpsMutex);
-        av_seek_frame(avFormatContext, audio_index, (double) (time) / av_q2d(audioTimeBase) / 1000,
-                      AVSEEK_FLAG_BACKWARD);
-        av_seek_frame(avFormatContext, video_index, (double) (time) / av_q2d(videoTimeBase) / 1000,
-                      AVSEEK_FLAG_BACKWARD);
+        if (audioAvailable()) {
+            av_seek_frame(avFormatContext, audio_index,
+                          (double) (time) / av_q2d(audioTimeBase) / 1000,
+                          AVSEEK_FLAG_BACKWARD);
+        }
+        if (videoAvailable()) {
+            av_seek_frame(avFormatContext, video_index,
+                          (double) (time) / av_q2d(videoTimeBase) / 1000,
+                          AVSEEK_FLAG_BACKWARD);
+        }
         clear(videoPacketQueue);
         clear(audioPacketQueue);
         clear(videoFrameQueue);
         clear(audioFrameQueue);
         audioClock = (double) (time) / 1000;
         videoClock = (double) (time) / 1000;
+        notifyInfo(MEDIA_INFO_BUFFERING_START);
+        interruptContext->audioBuffering = true;
         pthread_mutex_unlock(&avOpsMutex);
         pthread_cond_signal(&videoFrameEmptyCond);
         pthread_cond_signal(&audioFrameEmptyCond);
@@ -663,9 +792,6 @@ void BipPlayer::seekTo(long time) {
         pthread_mutex_unlock(&videoMutex);
         pthread_mutex_unlock(&audioFrameMutex);
         pthread_mutex_unlock(&videoFrameMutex);
-        if (playState != STATE_PLAYING) {
-
-        }
         postEventFromNative(MEDIA_SEEK_COMPLETE, 0, 0, nullptr);
     }
 }
@@ -705,6 +831,13 @@ void *playVideoThread(void *args) {
     pthread_exit(nullptr);//退出线程
 }
 
+void *bipMsgLoopThread(void *args) {
+    auto bipPlayer = (BipPlayer *) args;
+    pthread_setname_np(bipPlayer->msgLoopThreadId, "BipMsgLoop");
+    bipPlayer->msgLoop();
+    pthread_exit(nullptr);//退出线程
+}
+
 void playerSetJavaWeak(BipPlayer *bipPlayer, void *weak_this) {
     bipPlayer->weakJavaThis = weak_this;
 }
@@ -721,28 +854,39 @@ void BipPlayer::start() {
 }
 
 void BipPlayer::cacheVideo() {
-    while (true) {
+    while (playState >= STATE_PREPARING) {
+        LOGD("video cache wait lock");
         pthread_mutex_lock(&videoMutex);
-        if (playState < STATE_PREPARING || playState >= STATE_COMPLETED) {
+        LOGD("video cache wait lock success");
+        if (playState < STATE_PREPARING) {
             pthread_mutex_unlock(&videoMutex);
             break;
         }
         if (videoPacketQueue.empty()) {
+            LOGD("video cache empty wait frame lock");
             pthread_cond_wait(&videoCond, &videoMutex);
+            LOGD("video cache empty wait frame lock success");
         }
         if (!videoPacketQueue.empty()) {
             AVPacket *packet = videoPacketQueue.front();
             videoPacketQueue.pop();
             pthread_mutex_unlock(&videoMutex);
             AVFrame *frame = av_frame_alloc();
+            LOGD("video cache receive lock wait");
             pthread_mutex_lock(&avOpsMutex);
+            LOGD("video cache receive lock wait success");
             avcodec_send_packet(avCodecContext, packet);
+            LOGD("video cache receive wait");
             int receiveResult = avcodec_receive_frame(avCodecContext, frame);
+            LOGD("video cache receive wait success");
             pthread_mutex_unlock(&avOpsMutex);
             av_packet_free(&packet);
             if (!receiveResult) {
+                LOGD("video cache wait frame lock");
                 pthread_mutex_lock(&videoFrameMutex);
+                LOGD("video cache wait frame lock success");
                 videoFrameQueue.push(frame);
+                interruptContext->videoSize = videoFrameQueue.size();
                 pthread_cond_signal(&videoFrameCond);
                 if (videoFrameQueue.size() >= max_frame_buff_size) {
                     pthread_cond_wait(&videoFrameEmptyCond, &videoFrameMutex);
@@ -756,29 +900,50 @@ void BipPlayer::cacheVideo() {
 }
 
 void BipPlayer::cacheAudio() {
-    while (true) {
+    while (playState >= STATE_PREPARING) {
+        LOGD("audio cache wait lock");
         pthread_mutex_lock(&audioMutex);
-        if (playState < STATE_PREPARING || playState >= STATE_COMPLETED) {
+        LOGD("audio cache wait lock success");
+        if (playState < STATE_PREPARING) {
             pthread_mutex_unlock(&audioMutex);
             break;
         }
         if (audioPacketQueue.empty()) {
+            LOGD("audio cache empty wait frame lock");
             pthread_cond_wait(&audioCond, &audioMutex);
+            LOGD("audio cache empty wait frame lock success");
         }
         if (!audioPacketQueue.empty()) {
             AVPacket *packet = audioPacketQueue.front();
             audioPacketQueue.pop();
             pthread_mutex_unlock(&audioMutex);
             AVFrame *audioFrame = av_frame_alloc();
+            LOGD("audio cache receive lock wait");
             pthread_mutex_lock(&avOpsMutex);
+            LOGD("audio cache receive lock wait success");
             avcodec_send_packet(audioCodecContext, packet);
+            LOGD("audio cache receive wait");
             int receiveResult = avcodec_receive_frame(audioCodecContext, audioFrame);
+            LOGD("audio cache receive wait success");
             pthread_mutex_unlock(&avOpsMutex);
             av_packet_free(&packet);
             if (!receiveResult) {
+                LOGD("audio cache wait frame lock");
                 pthread_mutex_lock(&audioFrameMutex);
+                LOGD("audio cache wait frame lock success");
                 audioFrameQueue.push(audioFrame);
-                pthread_cond_signal(&audioFrameCond);
+                interruptContext->audioSize = audioFrameQueue.size();
+                if (audioFrameQueue.size() >= min_frame_buff_size) {
+                    if (interruptContext->audioBuffering) {
+                        interruptContext->audioBuffering = false;
+                        notifyInfo(MEDIA_INFO_BUFFERING_END);
+                        pthread_cond_signal(&audioFrameCond);
+                    }
+                } else {
+                    if (interruptContext->audioBuffering) {
+                        LOGE("buffering audio size %ld", audioFrameQueue.size());
+                    }
+                }
                 if (audioFrameQueue.size() >= max_frame_buff_size) {
                     pthread_cond_wait(&audioFrameEmptyCond, &audioFrameMutex);
                 }
@@ -810,23 +975,30 @@ void BipPlayer::waitAllThreadStop() {
         pthread_join(prepareThreadId, nullptr);
         prepareThreadId = 0;
     }
+    LOGE("prepare thread stop");
     if (videoPlayId != 0 && pthread_kill(videoPlayId, 0) == 0) {
         pthread_join(videoPlayId, nullptr);
         videoPlayId = 0;
     }
+    LOGE("videoPlay thread stop");
     if (cacheAudioThreadId != 0 && pthread_kill(cacheAudioThreadId, 0) == 0) {
         pthread_join(cacheAudioThreadId, nullptr);
         cacheAudioThreadId = 0;
     }
+    LOGE("audioCache thread stop");
     if (cacheVideoThreadId != 0 && pthread_kill(cacheVideoThreadId, 0) == 0) {
         pthread_join(cacheVideoThreadId, nullptr);
         cacheVideoThreadId = 0;
     }
+    LOGE("videoCache thread stop");
 }
 
 void BipPlayer::prepareNext() {
     //打开输入流
     AVFormatContext *nextAvFormatContext = avformat_alloc_context();
+    nextAvFormatContext->interrupt_callback.callback = avFormatInterrupt;
+    nextAvFormatContext->interrupt_callback.opaque = nextInterruptContext;
+    nextInterruptContext->reset();
     AVDictionary *dic = nullptr;
     av_dict_set(&dic, "bufsize", "655360", 0);
     std::map<const char *, const char *>::iterator iterator;
@@ -1015,6 +1187,11 @@ void BipPlayer::prepareNext() {
         rgb_frame = nextRGBFrame;
         swsContext = nextSwsContext;
         duration = nextAvFormatContext->duration / 1000;
+        //切换中断上下文
+        auto tempInterruptContext = nextInterruptContext;
+        nextInterruptContext = interruptContext;
+        interruptContext = tempInterruptContext;
+
         clear(videoPacketQueue);
         clear(audioPacketQueue);
         clear(videoFrameQueue);
@@ -1041,5 +1218,104 @@ void BipPlayer::prepareNext() {
     //切换播放器完成
     av_free(errorMsg);
 }
+
+void BipPlayer::msgLoop() {
+    while (playState != STATE_RELEASE) {
+        pthread_mutex_lock(&msgMutex);
+        if (!msgQueue.empty()) {
+            BIPMessage *processMsg = msgQueue.front();
+            msgQueue.pop();
+            pthread_mutex_unlock(&msgMutex);
+            LOGE("process msg %x with arg1:%d arg2:%d", processMsg->what, processMsg->arg1,
+                 processMsg->arg2);
+            switch (processMsg->what) {
+                case MSG_SEEK:
+                    seekTo(processMsg->arg1);
+                    break;
+                case MSG_STOP:
+                    stop();
+                    break;
+                case MSG_START:
+                    start();
+                    break;
+                case MSG_PAUSE:
+                    pause();
+                    break;
+                case MSG_RESET:
+                    reset();
+                    break;
+                case MSG_RELEASE:
+                    release();
+                    return;
+            }
+            LOGE("process msg %x completed", processMsg->what);
+            //消息处理完毕
+            delete processMsg;
+        } else {
+            pthread_cond_wait(&msgCond, &msgMutex);
+            pthread_mutex_unlock(&msgMutex);
+            continue;
+        }
+    }
+}
+
+void BipPlayer::notifyMsg(BIPMessage *message) {
+    pthread_mutex_lock(&msgMutex);
+    msgQueue.push(message);
+    pthread_cond_signal(&msgCond);
+    pthread_mutex_unlock(&msgMutex);
+}
+
+void BipPlayer::notifyMsg(int what) {
+    auto *message = new BIPMessage();
+    message->what = what;
+    notifyMsg(message);
+}
+
+bool BipPlayer::audioAvailable() {
+    return audio_index != -1;
+}
+
+bool BipPlayer::videoAvailable() {
+    return video_index != -1;
+}
+
+void InterruptContext::reset() {
+    readStartTime.tv_sec = 0;
+    audioBuffering = false;
+    audioSize = 0;
+    videoSize = 0;
+}
+
+
+void logw(const char *fmt, ...) {
+//    if(LOGW){
+//        va_list args;
+//        va_start(args,fmt);
+//        LOGW(fmt,args);
+//        va_end(args);
+//    }
+}
+
+void loge(const char *fmt, ...) {
+//    if(LOGE){
+//        va_list args;
+//        va_start(args,fmt);
+//        __android_log_print(ANDROID_LOG_ERROR,"DefaultBIPPlayerNative",fmt,args);
+////        LOGE(fmt,args);
+//        va_end(args);
+//    }
+}
+
+void logd(const char *fmt, ...) {
+//    if(LOGD){
+//        va_list args;
+//        va_start(args,fmt);
+//        LOGD(fmt,args);
+//        va_end(args);
+//    }
+}
+
+
 
 

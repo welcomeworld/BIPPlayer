@@ -26,9 +26,33 @@ extern "C" {
 #ifdef __cplusplus
 };
 #endif
+#define BLOGW  true
+#define BLOGE  true
+#define BLOGD  true
 
+#if BLOGE
 #define LOGE(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"DefaultBIPPlayerNative",FORMAT,##__VA_ARGS__)
+#else
+#define LOGE(FORMAT, ...) loge(FORMAT,##__VA_ARGS__)
+#endif
+#if BLOGW
 #define LOGW(FORMAT, ...) __android_log_print(ANDROID_LOG_WARN,"DefaultBIPPlayerNative",FORMAT,##__VA_ARGS__)
+#else
+#define LOGW(FORMAT, ...) logw(FORMAT,##__VA_ARGS__)
+#endif
+#if BLOGD
+#define LOGD(FORMAT, ...) __android_log_print(ANDROID_LOG_DEBUG,"DefaultBIPPlayerNative",FORMAT,##__VA_ARGS__)
+#else
+#define LOGD(FORMAT, ...) logd(FORMAT,##__VA_ARGS__)
+#endif
+#define MAX_FRAME_BUFF_SIZE 200
+#define MIN_FRAME_BUFF_SIZE 50
+#define MSG_SEEK 0x233
+#define MSG_STOP 0x234
+#define MSG_START 0x235
+#define MSG_PAUSE 0x236
+#define MSG_RESET 0x237
+#define MSG_RELEASE 0x238
 
 
 extern jclass defaultBIPPlayerClass;
@@ -47,6 +71,11 @@ void clear(std::queue<AVFrame *> &q);
 void *cacheVideoFrameThread(void *args);
 
 void *cacheAudioFrameThread(void *args);
+
+void logw(const char* fmt,...);
+void loge(const char* fmt,...);
+void logd(const char* fmt,...);
+
 
 enum PlayerState {
     STATE_RELEASE = 0,
@@ -72,6 +101,27 @@ struct ptrCmp {
     }
 };
 
+class InterruptContext {
+public:
+    timeval readStartTime;
+    long audioSize = 0;
+    long videoSize = 0;
+    bool audioBuffering = false;
+    void reset();
+};
+
+class BIPMessage {
+public:
+    int arg1;
+    int arg2;
+    void *obj;
+
+    void (*free_l)(void *obj);
+
+    int what;
+    BIPMessage *next;
+};
+
 class BipPlayer {
 private:
 
@@ -81,7 +131,8 @@ private:
     static const int MEDIA_SEEK_COMPLETE = 4;
     static const int MEDIA_ERROR = 5;
     static const int MEDIA_PLAY_STATE_CHANGE = 6;
-
+    static const int MEDIA_INFO = 7;
+    static const int MEDIA_PLAYER_MESSAGE = 8;
     constexpr static const double AV_SYNC_THRESHOLD_MIN = 0.04;
     constexpr static const double AV_SYNC_THRESHOLD_MAX = 0.1;
 
@@ -90,8 +141,12 @@ private:
     static const int OPT_CATEGORY_SWS = 3;
     static const int OPT_CATEGORY_PLAYER = 4;
 
-    int max_frame_buff_size = 100;
-    int min_frame_buff_size = 50;
+    static const int MEDIA_INFO_BUFFERING_START = 0;
+    static const int MEDIA_INFO_BUFFERING_END = 1;
+
+
+    int max_frame_buff_size = 200;
+    int min_frame_buff_size = 100;
     int bufferPercent = 0;
 
     bool nextIsDash = true;
@@ -104,6 +159,12 @@ private:
     std::map<const char *, const char *, ptrCmp> codecOps;
     std::map<const char *, const char *, ptrCmp> playerOps;
     std::map<const char *, const char *, ptrCmp> swsOps;
+    std::queue<BIPMessage *> msgQueue;
+    pthread_mutex_t msgMutex;
+    pthread_cond_t msgCond;
+
+    InterruptContext *interruptContext;
+    InterruptContext *nextInterruptContext;
 
     //创建引擎
     void createEngine();
@@ -122,7 +183,13 @@ private:
 
     void notifyCompleted();
 
+    void notifyInfo(int info);
+
     void waitAllThreadStop();
+
+    bool videoAvailable();
+
+    bool audioAvailable();
 
 public:
 
@@ -166,6 +233,12 @@ public:
 
     void prepareNext();
 
+    void msgLoop();
+
+    void notifyMsg(BIPMessage *bipMessage);
+
+    void notifyMsg(int what);
+
     BipPlayer();
 
     ~BipPlayer();
@@ -181,8 +254,10 @@ public:
     char *dashInputPath;
     pthread_t prepareThreadId = 0;
     pthread_t prepareNextThreadId = 0;
+    pthread_t msgLoopThreadId = 0;
     AVFormatContext *avFormatContext;
     pthread_mutex_t avOpsMutex;
+    double baseClock; //基准时钟，单位位秒
 
     //video
     AVCodecContext *avCodecContext = nullptr;
