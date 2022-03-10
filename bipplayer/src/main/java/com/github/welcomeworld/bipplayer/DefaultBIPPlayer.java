@@ -84,7 +84,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     private native void _release();
 
-    private native void _prepare_next(String path);
+    private native void _prepare_next(String path, boolean dash);
 
     @Override
     public native void start();
@@ -155,7 +155,11 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void prepareQualityAsync(String path) {
-        _prepare_next(path);
+        _prepare_next(path, true);
+    }
+
+    public void prepareNextAsync(String path) {
+        _prepare_next(path, false);
     }
 
     @Override
@@ -260,7 +264,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
                     bip.setPlaying(msg.arg1 == 1);
                     break;
                 case MEDIA_INFO:
-                    bip.notifyOnInfo(msg.arg1,msg.arg2);
+                    bip.notifyOnInfo(msg.arg1, msg.arg2);
                     break;
                 case MEDIA_PLAYER_MESSAGE:
                     break;

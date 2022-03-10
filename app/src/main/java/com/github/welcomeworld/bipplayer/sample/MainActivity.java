@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         checkPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
-        bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT,"allowed_extensions","ALL");
+        bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT, "allowed_extensions", "ALL");
         bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT, "reconnect", "1");
         bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", "1");
         bipPlayer.setOption(DefaultBIPPlayer.OPT_CATEGORY_FORMAT, "user_agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36");
@@ -69,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         bipPlayer.setOnInfoListener((bp, what, extra) -> {
-            switch (what){
+            switch (what) {
                 case 0:
                     binding.buffering.setVisibility(View.VISIBLE);
                     break;
@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
         binding.videoPrepare.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test2.mp4");
+                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
                 bipPlayer.setDataSource(file.getAbsolutePath());
 //                bipPlayer.setDataSource("http://stream4.iqilu.com/ksd/video/2020/02/17/c5e02420426d58521a8783e754e9f4e6.mp4");
 //                bipPlayer.setDataSource("https://stream7.iqilu.com/10339/upload_transcode/202002/18/20200218114723HDu3hhxqIT.mp4");
@@ -94,9 +94,17 @@ public class MainActivity extends AppCompatActivity {
         binding.videoQuality.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "test.mp4");
+                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "testaudio.mp3");
                 bipPlayer.setDataSource(file.getAbsolutePath());
                 bipPlayer.prepareQualityAsync(file.getAbsolutePath());
+            }
+        });
+        binding.videoNext.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "tescc.m3u8");
+                bipPlayer.setDataSource(file.getAbsolutePath());
+                bipPlayer.prepareNextAsync(file.getAbsolutePath());
             }
         });
 

@@ -110,12 +110,17 @@ void native_finalize(JNIEnv *env, jobject instance) {
     delete bipPlayer;
 }
 
-void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_) {
+void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboolean dash) {
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
     char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
     strcpy(cinputPath, inputPath);
-    bipPlayer->dashInputPath = cinputPath;
+    if (dash) {
+        bipPlayer->dashInputPath = cinputPath;
+    } else {
+        bipPlayer->nextInputPath = cinputPath;
+    }
+    bipPlayer->nextIsDash = dash;
     pthread_create(&(bipPlayer->prepareNextThreadId), nullptr, prepareNextVideoThread,
                    bipPlayer);//开启begin线程
     env->ReleaseStringUTFChars(inputPath_, inputPath);
@@ -138,7 +143,7 @@ static JNINativeMethod methods[] = {
         {"_release",           "()V",                                      (void *) native_release},
         {"native_finalize",    "()V",                                      (void *) native_finalize},
         {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V", (void *) native_setOption},
-        {"_prepare_next",      "(Ljava/lang/String;)V",                    (void *) native_prepare_next}
+        {"_prepare_next",      "(Ljava/lang/String;Z)V",                   (void *) native_prepare_next}
 };
 
 void loadJavaId(JNIEnv *env) {

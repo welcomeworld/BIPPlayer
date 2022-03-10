@@ -72,9 +72,11 @@ void *cacheVideoFrameThread(void *args);
 
 void *cacheAudioFrameThread(void *args);
 
-void logw(const char* fmt,...);
-void loge(const char* fmt,...);
-void logd(const char* fmt,...);
+void logw(const char *fmt, ...);
+
+void loge(const char *fmt, ...);
+
+void logd(const char *fmt, ...);
 
 
 enum PlayerState {
@@ -107,6 +109,7 @@ public:
     long audioSize = 0;
     long videoSize = 0;
     bool audioBuffering = false;
+
     void reset();
 };
 
@@ -149,7 +152,6 @@ private:
     int min_frame_buff_size = 100;
     int bufferPercent = 0;
 
-    bool nextIsDash = true;
     std::queue<AVPacket *> nextVideoPacketQueue;
     std::queue<AVFrame *> nextVideoFrameQueue;
     std::queue<AVPacket *> nextAudioPacketQueue;
@@ -250,6 +252,7 @@ public:
     long duration = -1;//单位毫秒
     void *weakJavaThis;
     const char *inputPath;
+    bool nextIsDash = true;
     char *nextInputPath;
     char *dashInputPath;
     pthread_t prepareThreadId = 0;

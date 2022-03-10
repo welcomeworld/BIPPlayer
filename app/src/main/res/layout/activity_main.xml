@@ -167,4 +167,17 @@
         android:text="quality"
         android:textColor="@color/black"
         android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/video_next"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="18dp"
+        android:background="#999999"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="next"
+        android:textColor="@color/black"
+        android:textSize="14sp" />
 </LinearLayout>
