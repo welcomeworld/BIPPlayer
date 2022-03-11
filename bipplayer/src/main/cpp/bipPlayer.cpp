@@ -145,19 +145,26 @@ int BipPlayer::getPcm() {
             break;
         }
         if (audioFrameQueue.empty()) {
-            if (baseClock * 1000 > duration || FFABS(baseClock * 1000 - duration) < 500) {
-                notifyCompleted();
-            } else {
-                if (!interruptContext->audioBuffering) {
-                    notifyInfo(MEDIA_INFO_BUFFERING_START);
-                    interruptContext->audioBuffering = true;
+            if (audioAvailable()) {
+                if (baseClock * 1000 > duration || FFABS(baseClock * 1000 - duration) < 500) {
+                    notifyCompleted();
+                    pthread_mutex_unlock(&audioFrameMutex);
+                    break;
+                } else {
+                    if (!interruptContext->audioBuffering) {
+                        notifyInfo(MEDIA_INFO_BUFFERING_START);
+                        interruptContext->audioBuffering = true;
+                    }
                 }
                 LOGW("audio play empty wait");
                 pthread_cond_wait(&audioFrameCond, &audioFrameMutex);
                 LOGW("audio play empty wait success");
+            } else {
+                pthread_mutex_unlock(&audioFrameMutex);
+                break;
             }
         }
-        if (!audioFrameQueue.empty() && playState == STATE_PLAYING) {
+        if (audioAvailable() && !audioFrameQueue.empty() && playState == STATE_PLAYING) {
             AVFrame *audioFrame = audioFrameQueue.front();
             audioFrameQueue.pop();
             interruptContext->audioSize = audioFrameQueue.size();
@@ -213,13 +220,21 @@ void BipPlayer::showVideoPacket() {
             break;
         }
         if (videoFrameQueue.empty()) {
-            if (FFABS(baseClock * 1000 - duration) < 500) {
-                break;
-            } else {
-                LOGW("video show empty wait");
-                pthread_cond_wait(&videoFrameCond, &videoFrameMutex);
-                LOGW("video show empty wait success");
+            if (!audioAvailable()) {
+                if (baseClock * 1000 > duration || FFABS(baseClock * 1000 - duration) < 500) {
+                    notifyCompleted();
+                    pthread_mutex_unlock(&videoFrameMutex);
+                    break;
+                } else {
+                    if (!interruptContext->audioBuffering) {
+                        notifyInfo(MEDIA_INFO_BUFFERING_START);
+                        interruptContext->audioBuffering = true;
+                    }
+                }
             }
+            LOGW("video show empty wait");
+            pthread_cond_wait(&videoFrameCond, &videoFrameMutex);
+            LOGW("video show empty wait success");
         }
         if (!videoFrameQueue.empty()) {
             AVFrame *frame = videoFrameQueue.front();
@@ -721,7 +736,7 @@ long BipPlayer::getDuration() const {
 }
 
 long BipPlayer::getCurrentPosition() const {
-    return (long) (audioClock * 1000);
+    return (long) (baseClock * 1000);
 }
 
 int BipPlayer::getVideoHeight() const {
@@ -760,13 +775,14 @@ void clear(std::queue<AVFrame *> &q) {
 
 void BipPlayer::seekTo(long time) {
     if (playState >= STATE_PREPARED) {
-        audioClock = (double) (time) / 1000;
-        videoClock = (double) (time) / 1000;
         pthread_mutex_lock(&avOpsMutex);
         pthread_mutex_lock(&videoMutex);
         pthread_mutex_lock(&audioMutex);
         pthread_mutex_lock(&videoFrameMutex);
         pthread_mutex_lock(&audioFrameMutex);
+        baseClock = (double) (time) / 1000;
+        audioClock = baseClock;
+        videoClock = baseClock;
         if (audioAvailable()) {
             av_seek_frame(avFormatContext, audio_index,
                           (double) (time) / av_q2d(audioTimeBase) / 1000,
@@ -781,8 +797,6 @@ void BipPlayer::seekTo(long time) {
         clear(audioPacketQueue);
         clear(videoFrameQueue);
         clear(audioFrameQueue);
-        audioClock = (double) (time) / 1000;
-        videoClock = (double) (time) / 1000;
         notifyInfo(MEDIA_INFO_BUFFERING_START);
         interruptContext->audioBuffering = true;
         pthread_mutex_unlock(&avOpsMutex);
@@ -887,7 +901,21 @@ void BipPlayer::cacheVideo() {
                 LOGD("video cache wait frame lock success");
                 videoFrameQueue.push(frame);
                 interruptContext->videoSize = videoFrameQueue.size();
-                pthread_cond_signal(&videoFrameCond);
+                if (!audioAvailable()) {
+                    if (videoFrameQueue.size() >= min_frame_buff_size) {
+                        if (interruptContext->audioBuffering) {
+                            interruptContext->audioBuffering = false;
+                            notifyInfo(MEDIA_INFO_BUFFERING_END);
+                            pthread_cond_signal(&videoFrameCond);
+                        }
+                    } else {
+                        if (interruptContext->audioBuffering) {
+                            LOGE("buffering audio size %ld", audioFrameQueue.size());
+                        }
+                    }
+                } else {
+                    pthread_cond_signal(&videoFrameCond);
+                }
                 if (videoFrameQueue.size() >= max_frame_buff_size) {
                     pthread_cond_wait(&videoFrameEmptyCond, &videoFrameMutex);
                 }
@@ -1224,6 +1252,9 @@ void BipPlayer::prepareNext() {
                                              nextAvCodecContext->height,
                                              WINDOW_FORMAT_RGBA_8888);
         }
+    }
+    if (nextAudioIndex != -1 && audio_index == -1 && playState == STATE_PLAYING) {
+        pthread_create(&audioPlayId, nullptr, playAudioThread, this);//开启begin线程
     }
     avFormatContext = nextAvFormatContext;
     video_index = nextVideoIndex;
