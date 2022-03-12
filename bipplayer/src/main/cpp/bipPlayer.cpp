@@ -239,6 +239,9 @@ void BipPlayer::showVideoPacket() {
         if (!videoFrameQueue.empty()) {
             AVFrame *frame = videoFrameQueue.front();
             videoFrameQueue.pop();
+            //转换成RGBA格式
+            sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
+                      rgb_frame->data, rgb_frame->linesize);
             interruptContext->videoSize = videoFrameQueue.size();
             pthread_cond_signal(&videoFrameEmptyCond);
             pthread_mutex_unlock(&videoFrameMutex);
@@ -277,9 +280,6 @@ void BipPlayer::showVideoPacket() {
                 av_frame_free(&frame);
                 continue;
             }
-            //转换成RGBA格式
-            sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
-                      rgb_frame->data, rgb_frame->linesize);
             //  rgb_frame是有画面数据
             auto *dst = static_cast<uint8_t *>(nativeWindowBuffer.bits);
             //拿到一行有多少个字节 RGBA
@@ -610,19 +610,37 @@ void BipPlayer::prepare() {
     pthread_create(&cacheAudioThreadId, nullptr, cacheAudioFrameThread, this);
     notifyInfo(MEDIA_INFO_BUFFERING_START);
     interruptContext->audioBuffering = true;
+    AVFormatContext *rootFormatContext;
     while (playState > STATE_ERROR) {
         LOGD("prepare wait lock");
         pthread_mutex_lock(&avOpsMutex);
         LOGD("prepare wait lock success");
         auto *avPacket = av_packet_alloc();
         gettimeofday(&(interruptContext->readStartTime), nullptr);
+        rootFormatContext = avFormatContext;
         readResult = av_read_frame(avFormatContext, avPacket);
         pthread_mutex_unlock(&avOpsMutex);
         if (readResult >= 0) {
             if (avPacket->stream_index == video_index) {
+                if (!audioAvailable()) {
+                    if (duration > 0) {
+                        int percent = round(
+                                avPacket->pts * av_q2d(videoTimeBase) * 100000 / duration);
+                        if (percent != bufferPercent) {
+                            bufferPercent = percent;
+                            postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
+                        }
+                    }
+                }
                 LOGD("prepare video wait lock");
                 pthread_mutex_lock(&videoMutex);
                 LOGD("prepare video wait lock success");
+                if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+                    av_packet_free(&avPacket);
+                    pthread_cond_signal(&videoCond);
+                    pthread_mutex_unlock(&videoMutex);
+                    continue;
+                }
                 videoPacketQueue.push(avPacket);
                 pthread_cond_signal(&videoCond);
                 pthread_mutex_unlock(&videoMutex);
@@ -634,20 +652,23 @@ void BipPlayer::prepare() {
                     audioCache = -1;
                     notifyPrepared();
                 }
-                if (!audioAvailable()) {
-                    if (duration > 0) {
-                        int percent = round(
-                                avPacket->pts * av_q2d(videoTimeBase) * 100000 / duration);
-                        if (percent != bufferPercent) {
-                            bufferPercent = percent;
-                            postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
-                        }
+            } else if (avPacket->stream_index == audio_index) {
+                if (duration > 0) {
+                    int percent = round(avPacket->pts * av_q2d(audioTimeBase) * 100000 / duration);
+                    if (percent != bufferPercent) {
+                        bufferPercent = percent;
+                        postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
                     }
                 }
-            } else if (avPacket->stream_index == audio_index) {
                 LOGD("prepare audio wait lock");
                 pthread_mutex_lock(&audioMutex);
                 LOGD("prepare audio wait lock success");
+                if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+                    av_packet_free(&avPacket);
+                    pthread_cond_signal(&audioCond);
+                    pthread_mutex_unlock(&audioMutex);
+                    continue;
+                }
                 audioPacketQueue.push(avPacket);
                 pthread_cond_signal(&audioCond);
                 pthread_mutex_unlock(&audioMutex);
@@ -658,13 +679,6 @@ void BipPlayer::prepare() {
                     videoCache = -1;
                     audioCache = -1;
                     notifyPrepared();
-                }
-                if (duration > 0) {
-                    int percent = round(avPacket->pts * av_q2d(audioTimeBase) * 100000 / duration);
-                    if (percent != bufferPercent) {
-                        bufferPercent = percent;
-                        postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
-                    }
                 }
             }
         } else {
@@ -868,6 +882,7 @@ void BipPlayer::start() {
 }
 
 void BipPlayer::cacheVideo() {
+    AVFormatContext *rootFormatContext;
     while (playState >= STATE_PREPARING) {
         LOGD("video cache wait lock");
         pthread_mutex_lock(&videoMutex);
@@ -884,10 +899,16 @@ void BipPlayer::cacheVideo() {
         if (!videoPacketQueue.empty()) {
             AVPacket *packet = videoPacketQueue.front();
             videoPacketQueue.pop();
+            rootFormatContext = avFormatContext;
             pthread_mutex_unlock(&videoMutex);
-            AVFrame *frame = av_frame_alloc();
             LOGD("video cache receive lock wait");
             pthread_mutex_lock(&avOpsMutex);
+            if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+                av_packet_free(&packet);
+                pthread_mutex_unlock(&avOpsMutex);
+                continue;
+            }
+            AVFrame *frame = av_frame_alloc();
             LOGD("video cache receive lock wait success");
             avcodec_send_packet(avCodecContext, packet);
             LOGD("video cache receive wait");
@@ -906,11 +927,11 @@ void BipPlayer::cacheVideo() {
                         if (interruptContext->audioBuffering) {
                             interruptContext->audioBuffering = false;
                             notifyInfo(MEDIA_INFO_BUFFERING_END);
-                            pthread_cond_signal(&videoFrameCond);
                         }
+                        pthread_cond_signal(&videoFrameCond);
                     } else {
                         if (interruptContext->audioBuffering) {
-                            LOGE("buffering audio size %ld", audioFrameQueue.size());
+                            LOGE("buffering video size %ld", videoFrameQueue.size());
                         }
                     }
                 } else {
@@ -928,6 +949,7 @@ void BipPlayer::cacheVideo() {
 }
 
 void BipPlayer::cacheAudio() {
+    AVFormatContext *rootFormatContext;
     while (playState >= STATE_PREPARING) {
         LOGD("audio cache wait lock");
         pthread_mutex_lock(&audioMutex);
@@ -944,11 +966,17 @@ void BipPlayer::cacheAudio() {
         if (!audioPacketQueue.empty()) {
             AVPacket *packet = audioPacketQueue.front();
             audioPacketQueue.pop();
+            rootFormatContext = avFormatContext;
             pthread_mutex_unlock(&audioMutex);
-            AVFrame *audioFrame = av_frame_alloc();
             LOGD("audio cache receive lock wait");
             pthread_mutex_lock(&avOpsMutex);
             LOGD("audio cache receive lock wait success");
+            if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+                av_packet_free(&packet);
+                pthread_mutex_unlock(&avOpsMutex);
+                continue;
+            }
+            AVFrame *audioFrame = av_frame_alloc();
             avcodec_send_packet(audioCodecContext, packet);
             LOGD("audio cache receive wait");
             int receiveResult = avcodec_receive_frame(audioCodecContext, audioFrame);
