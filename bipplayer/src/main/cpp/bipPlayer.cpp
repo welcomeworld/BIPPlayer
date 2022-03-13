@@ -10,6 +10,11 @@ JavaVM *staticVm;
 
 void *bipMsgLoopThread(void *args);
 
+long calculateTime(timeval startTime, timeval endTime) {
+    return (endTime.tv_sec - startTime.tv_sec) * 1000 +
+           (endTime.tv_usec - startTime.tv_usec) / 1000;
+}
+
 bool javaExceptionCheckCatchAll(JNIEnv *env) {
     if (env->ExceptionCheck()) {
         env->ExceptionDescribe();
@@ -210,8 +215,13 @@ void BipPlayer::showVideoPacket() {
     , diff   //音频帧与视频帧相差时间
     , sync_threshold //合理的范围
     , pts;
+    timeval lastShowTime{};
+    timeval decodeStartTime{};
+    timeval decodeEndTime{};
+    gettimeofday(&lastShowTime, nullptr);
     while (playState == STATE_PLAYING) {
         double frame_time_stamp = av_q2d(videoTimeBase); //时间戳的实际时间单位
+        gettimeofday(&decodeStartTime, nullptr);
         LOGD("video show wait frame lock");
         pthread_mutex_lock(&videoFrameMutex);
         LOGD("video show get frame lock success");
@@ -232,6 +242,10 @@ void BipPlayer::showVideoPacket() {
                     }
                 }
             }
+            decodeStartTime.tv_usec = 0;
+            decodeStartTime.tv_sec = 0;
+            lastShowTime.tv_usec = 0;
+            lastShowTime.tv_sec = 0;
             LOGW("video show empty wait");
             pthread_cond_wait(&videoFrameCond, &videoFrameMutex);
             LOGW("video show empty wait success");
@@ -264,13 +278,13 @@ void BipPlayer::showVideoPacket() {
                     delay = delay + diff;
                 }
             }
-            if (delay <= 0 || delay > 1) {
+            if (delay > 1) {
                 delay = last_delay;
             }
-            last_delay = delay;
             if (delay < 0) {
                 delay = 0;
             }
+            last_delay = delay;
             last_play = play;
             //上锁
             if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
@@ -293,8 +307,13 @@ void BipPlayer::showVideoPacket() {
                 memcpy(dst + i * destStride, src + i * srcStride, srcStride);
             }
             ANativeWindow_unlockAndPost(nativeWindow);
+            gettimeofday(&decodeEndTime, nullptr);
             if (delay > 0.001) {
-                av_usleep((int) (delay * 1000000));
+                long decodeSpendTime = calculateTime(decodeStartTime, decodeEndTime);
+                long realSleepTime = (long) (delay * 1000000) - decodeSpendTime * 1000;
+                if (realSleepTime > 0) {
+                    av_usleep(realSleepTime);
+                }
             }
             av_frame_free(&frame);
         } else {
@@ -435,8 +454,7 @@ int avFormatInterrupt(void *ctx) {
     auto interruptContext = (InterruptContext *) ctx;
     timeval currentTime{};
     gettimeofday(&currentTime, nullptr);
-    long diffTime = (currentTime.tv_sec - interruptContext->readStartTime.tv_sec) * 1000 +
-                    (currentTime.tv_usec - interruptContext->readStartTime.tv_usec) / 1000;
+    long diffTime = calculateTime(interruptContext->readStartTime, currentTime);
     if (interruptContext->readStartTime.tv_sec != 0) {
         if ((interruptContext->audioSize <= MIN_FRAME_BUFF_SIZE ||
              interruptContext->videoSize <= MIN_FRAME_BUFF_SIZE)) {
@@ -635,7 +653,7 @@ void BipPlayer::prepare() {
                 LOGD("prepare video wait lock");
                 pthread_mutex_lock(&videoMutex);
                 LOGD("prepare video wait lock success");
-                if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+                if (rootFormatContext == nullptr || rootFormatContext != avFormatContext) {
                     av_packet_free(&avPacket);
                     pthread_cond_signal(&videoCond);
                     pthread_mutex_unlock(&videoMutex);
@@ -663,7 +681,7 @@ void BipPlayer::prepare() {
                 LOGD("prepare audio wait lock");
                 pthread_mutex_lock(&audioMutex);
                 LOGD("prepare audio wait lock success");
-                if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+                if (rootFormatContext == nullptr || rootFormatContext != avFormatContext) {
                     av_packet_free(&avPacket);
                     pthread_cond_signal(&audioCond);
                     pthread_mutex_unlock(&audioMutex);
@@ -903,7 +921,7 @@ void BipPlayer::cacheVideo() {
             pthread_mutex_unlock(&videoMutex);
             LOGD("video cache receive lock wait");
             pthread_mutex_lock(&avOpsMutex);
-            if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+            if (rootFormatContext == nullptr || rootFormatContext != avFormatContext) {
                 av_packet_free(&packet);
                 pthread_mutex_unlock(&avOpsMutex);
                 continue;
@@ -971,7 +989,7 @@ void BipPlayer::cacheAudio() {
             LOGD("audio cache receive lock wait");
             pthread_mutex_lock(&avOpsMutex);
             LOGD("audio cache receive lock wait success");
-            if(rootFormatContext == nullptr||rootFormatContext != avFormatContext){
+            if (rootFormatContext == nullptr || rootFormatContext != avFormatContext) {
                 av_packet_free(&packet);
                 pthread_mutex_unlock(&avOpsMutex);
                 continue;
