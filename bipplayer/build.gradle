@@ -43,6 +43,21 @@ android {
     resourcePrefix "bip_player_"
 }
 
+def getVersionName = { ->
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'describe', '--tags'
+            standardOutput = stdout
+        }
+        return stdout.toString().trim()
+    }
+    catch (ignored) {
+        println "===================error name!"
+        return "1.0.00"
+    }
+}
+
 afterEvaluate {
     publishing {
         publications {
@@ -50,7 +65,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.welcomeworld'
                 artifactId = 'BIPPlayer'
-                version = '1.0.00'
+                version = getVersionName()
             }
         }
     }
