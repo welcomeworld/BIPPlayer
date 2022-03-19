@@ -106,8 +106,8 @@ struct ptrCmp {
 class InterruptContext {
 public:
     timeval readStartTime;
-    long audioSize = 0;
-    long videoSize = 0;
+    unsigned long audioSize = 0;
+    unsigned long videoSize = 0;
     bool audioBuffering = false;
 
     void reset();
@@ -150,6 +150,7 @@ private:
 
     int max_frame_buff_size = 200;
     int min_frame_buff_size = 100;
+    int prepare_frame_buff_size = 10;
     int bufferPercent = 0;
 
     std::queue<AVPacket *> nextVideoPacketQueue;
@@ -192,6 +193,12 @@ private:
     bool videoAvailable();
 
     bool audioAvailable();
+
+    void checkPrepared();
+
+    void lockAll();
+
+    void unLockAll();
 
 public:
 
@@ -245,6 +252,8 @@ public:
 
     ~BipPlayer();
 
+    int getFps() const;
+
 public:
 
     //播放状态
@@ -261,6 +270,7 @@ public:
     AVFormatContext *avFormatContext;
     pthread_mutex_t avOpsMutex;
     double baseClock; //基准时钟，单位位秒
+    int fps;
 
     //video
     AVCodecContext *avCodecContext = nullptr;
@@ -272,6 +282,7 @@ public:
     std::queue<AVFrame *> videoFrameQueue;
     pthread_t cacheVideoThreadId = 0;
     pthread_mutex_t videoMutex;
+    pthread_mutex_t videoCacheMutex;
     pthread_cond_t videoCond;
     pthread_mutex_t videoFrameMutex;
     pthread_cond_t videoFrameCond;
@@ -299,6 +310,7 @@ public:
     std::queue<AVFrame *> audioFrameQueue;
     pthread_t cacheAudioThreadId = 0;
     pthread_mutex_t audioMutex;
+    pthread_mutex_t audioCacheMutex;
     pthread_cond_t audioCond;
     pthread_mutex_t audioFrameMutex;
     pthread_cond_t audioFrameCond;
