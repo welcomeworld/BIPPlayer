@@ -53,6 +53,7 @@ extern "C" {
 #define MSG_PAUSE 0x236
 #define MSG_RESET 0x237
 #define MSG_RELEASE 0x238
+#define MSG_PREPARE_NEXT 0x239
 
 
 extern jclass defaultBIPPlayerClass;
@@ -148,8 +149,8 @@ private:
     static const int MEDIA_INFO_BUFFERING_END = 1;
 
 
-    int max_frame_buff_size = 200;
-    int min_frame_buff_size = 100;
+    int max_frame_buff_size = 20;
+    int min_frame_buff_size = 10;
     int prepare_frame_buff_size = 10;
     int bufferPercent = 0;
 
@@ -199,6 +200,10 @@ private:
     void lockAll();
 
     void unLockAll();
+
+    void freeContexts();
+
+    void destroyOpenSL();
 
 public:
 

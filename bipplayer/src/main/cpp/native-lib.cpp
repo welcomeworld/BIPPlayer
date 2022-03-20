@@ -115,14 +115,11 @@ void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboo
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
     char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
     strcpy(cinputPath, inputPath);
-    if (dash) {
-        bipPlayer->dashInputPath = cinputPath;
-    } else {
-        bipPlayer->nextInputPath = cinputPath;
-    }
-    bipPlayer->nextIsDash = dash;
-    pthread_create(&(bipPlayer->prepareNextThreadId), nullptr, prepareNextVideoThread,
-                   bipPlayer);//开启begin线程
+    auto *message = new BIPMessage();
+    message->what = MSG_PREPARE_NEXT;
+    message->arg1 = dash;
+    message->obj = cinputPath;
+    bipPlayer->notifyMsg(message);
     env->ReleaseStringUTFChars(inputPath_, inputPath);
 }
 
