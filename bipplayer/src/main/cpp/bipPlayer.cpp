@@ -363,7 +363,35 @@ void BipPlayer::postEventFromNative(int what, int arg1, int arg2, void *object) 
 }
 
 void BipPlayer::stop() {
-    reset();
+    if (playState == STATE_RELEASE || playState == STATE_UN_DEFINE) {
+        return;
+    }
+    lockAll();
+    playState = STATE_UN_DEFINE;
+    (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_STOPPED);
+    unLockAll();
+    waitAllThreadStop();
+    freeContexts();
+    if (inputPath) {
+        free((void *) inputPath);
+        inputPath = nullptr;
+    }
+    if (nextInputPath) {
+        free((void *) nextInputPath);
+        nextInputPath = nullptr;
+    }
+    if (dashInputPath) {
+        free((void *) dashInputPath);
+        dashInputPath = nullptr;
+    }
+    clear(audioPacketQueue);
+    clear(videoPacketQueue);
+    clear(videoFrameQueue);
+    clear(audioFrameQueue);
+    av_freep(&audioBuffer);
+    videoClock = 0;
+    audioClock = 0;
+    fps = 0;
 }
 
 void BipPlayer::reset() {
@@ -376,9 +404,18 @@ void BipPlayer::reset() {
     unLockAll();
     waitAllThreadStop();
     freeContexts();
-    free((void *) inputPath);
-    free((void *) nextInputPath);
-    free((void *) dashInputPath);
+    if (inputPath) {
+        free((void *) inputPath);
+        inputPath = nullptr;
+    }
+    if (nextInputPath) {
+        free((void *) nextInputPath);
+        nextInputPath = nullptr;
+    }
+    if (dashInputPath) {
+        free((void *) dashInputPath);
+        dashInputPath = nullptr;
+    }
     clear(audioPacketQueue);
     clear(videoPacketQueue);
     clear(videoFrameQueue);
@@ -387,6 +424,7 @@ void BipPlayer::reset() {
     videoClock = 0;
     audioClock = 0;
     fps = 0;
+    formatOps.clear();
 }
 
 int avFormatInterrupt(void *ctx) {
@@ -716,8 +754,6 @@ void BipPlayer::playAudio() {
 }
 
 BipPlayer::BipPlayer() {
-    LOGE("avFormatConfiguration:%s", avformat_configuration());
-    LOGE("avCodecConfiguration:%s", avcodec_configuration());
     interruptContext = new InterruptContext();
     nextInterruptContext = new InterruptContext;
     createEngine();
@@ -1281,7 +1317,10 @@ void BipPlayer::prepareNext() {
     lockAll();
     //切换播放器
     freeContexts();
-    av_frame_free(&rgb_frame);
+    if (rgb_frame != nullptr) {
+        av_frame_free(&rgb_frame);
+        rgb_frame = nullptr;
+    }
     if (nextVideoIndex != -1) {
         if (nativeWindow != nullptr) {
             //配置nativeWindow
