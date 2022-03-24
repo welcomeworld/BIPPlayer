@@ -28,6 +28,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     private static final int MEDIA_INFO_BUFFERING_START = 0;
     private static final int MEDIA_INFO_BUFFERING_END = 1;
+    private static final int MEDIA_INFO_FPS = 2;
 
     private SurfaceHolder mSurfaceHolder;
     private boolean mScreenOnWhilePlaying = true;
@@ -310,4 +311,11 @@ public final class DefaultBIPPlayer implements BIPPlayer {
      */
     @Override
     public native void setOption(int category, String name, String value);
+
+    /**
+     * should call after call prepare
+     * get fixed fps,not real fps
+     */
+    @Override
+    public native int getFps();
 }

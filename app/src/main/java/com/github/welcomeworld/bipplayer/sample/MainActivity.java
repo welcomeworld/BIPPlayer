@@ -76,6 +76,10 @@ public class MainActivity extends AppCompatActivity {
                 case 1:
                     binding.buffering.setVisibility(View.GONE);
                     break;
+                case 2:
+                    String fps = extra + "fps";
+                    binding.videoFps.setText(fps);
+                    break;
             }
         });
         bipPlayer.setDisplay(binding.surface.getHolder());

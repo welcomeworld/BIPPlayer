@@ -124,6 +124,11 @@ void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboo
     env->ReleaseStringUTFChars(inputPath_, inputPath);
 }
 
+jint native_getFps(JNIEnv *env, jobject instance) {
+    auto *bipPlayer = getNativePlayer(env, instance);
+    return bipPlayer->getFps();
+}
+
 static JNINativeMethod methods[] = {
         {"_prepareAsync",      "(Ljava/lang/String;)I",                    (void *) native_prepareAsync},
         {"_setVideoSurface",   "(Landroid/view/Surface;)V",                (void *) setVideoSurface},
@@ -141,7 +146,8 @@ static JNINativeMethod methods[] = {
         {"_release",           "()V",                                      (void *) native_release},
         {"native_finalize",    "()V",                                      (void *) native_finalize},
         {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V", (void *) native_setOption},
-        {"_prepare_next",      "(Ljava/lang/String;Z)V",                   (void *) native_prepare_next}
+        {"_prepare_next",      "(Ljava/lang/String;Z)V",                   (void *) native_prepare_next},
+        {"getFps",             "()I",                                      (void *) native_getFps}
 };
 
 void loadJavaId(JNIEnv *env) {

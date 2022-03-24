@@ -209,12 +209,15 @@ void BipPlayer::showVideoPacket() {
     double delay         //线程休眠时间
     , diff   //音频帧与视频帧相差时间
     , sync_threshold; //音视频差距界限
-    timeval decodeStartTime{};
-    timeval decodeEndTime{};
+    long decodeStartTime = 0;
+    long decodeEndTime = 0;
     long decodeSpendTime;
     long realSleepTime; //计算后的实际线程休眠时间,单位微秒
+    //上次计算fps的时间节点,单位毫秒，大于九百毫秒计算一次
+    long realFpsMarkTime = av_gettime();
+    int realShowFrame = 0;
     while (playState == STATE_PLAYING) {
-        gettimeofday(&decodeStartTime, nullptr);
+        decodeStartTime = av_gettime();
         pthread_mutex_lock(&videoFrameMutex);
         if (playState != STATE_PLAYING) {
             pthread_mutex_unlock(&videoFrameMutex);
@@ -241,9 +244,6 @@ void BipPlayer::showVideoPacket() {
                 frame = videoFrameQueue.front();
                 videoFrameQueue.pop();
                 interruptContext->videoSize = videoFrameQueue.size();
-                if (fps == 0) {
-                    fps = av_q2d(avFormatContext->streams[video_index]->r_frame_rate);
-                }
                 delay = 1.0 / fps;
                 if (frame->best_effort_timestamp == AV_NOPTS_VALUE) {
                     videoClock += delay;
@@ -288,9 +288,9 @@ void BipPlayer::showVideoPacket() {
             //上锁
             if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
                 //锁定窗口失败
-                gettimeofday(&decodeEndTime, nullptr);
-                decodeSpendTime = calculateTime(decodeStartTime, decodeEndTime);
-                realSleepTime = (long) (delay * 1000000) - decodeSpendTime * 1000;
+                decodeEndTime = av_gettime();
+                decodeSpendTime = decodeEndTime - decodeStartTime;
+                realSleepTime = (long) (delay * 1000000) - decodeSpendTime;
                 if (realSleepTime > 1000) {
                     av_usleep(realSleepTime);
                 }
@@ -310,9 +310,18 @@ void BipPlayer::showVideoPacket() {
                 memcpy(dst + i * destStride, src + i * srcStride, srcStride);
             }
             ANativeWindow_unlockAndPost(nativeWindow);
-            gettimeofday(&decodeEndTime, nullptr);
-            decodeSpendTime = calculateTime(decodeStartTime, decodeEndTime);
-            realSleepTime = (long) (delay * 1000000) - decodeSpendTime * 1000;
+            decodeEndTime = av_gettime();
+            decodeSpendTime = decodeEndTime - decodeStartTime;
+            realSleepTime = (long) (delay * 1000000) - decodeSpendTime;
+            long fpsTime = (decodeEndTime - realFpsMarkTime) / 1000;
+            if (fpsTime > 950) {
+                int realFps = ++realShowFrame * 1000 / fpsTime;
+                postEventFromNative(MEDIA_INFO, MEDIA_INFO_FPS, realFps, nullptr);
+                realFpsMarkTime = decodeEndTime;
+                realShowFrame = 0;
+            } else {
+                realShowFrame++;
+            }
             if (realSleepTime > 1000) {
                 av_usleep(realSleepTime);
             }
@@ -543,6 +552,9 @@ void BipPlayer::prepare() {
                                              avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
         }
         fps = av_q2d(avFormatContext->streams[video_index]->avg_frame_rate);
+        if (fps <= 0) {
+            fps = av_q2d(avFormatContext->streams[video_index]->r_frame_rate);
+        }
     }
     //找得到音频流
     if (audioAvailable()) {
@@ -1199,6 +1211,9 @@ void BipPlayer::prepareNext() {
         }
         av_opt_set_dict(nextSwsContext, &swsDic);
         nextFps = av_q2d(nextAvFormatContext->streams[nextVideoIndex]->avg_frame_rate);
+        if (nextFps <= 0) {
+            nextFps = av_q2d(nextAvFormatContext->streams[nextVideoIndex]->r_frame_rate);
+        }
     }
     AVCodecContext *nextAudioCodecContext = nullptr;
     SwrContext *nextAudioSwrContext = nullptr;

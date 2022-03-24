@@ -75,4 +75,6 @@ public interface BIPPlayer {
     void setOption(int category, String name, String value);
 
     void setOnInfoListener(OnInfoListener listener);
+
+    int getFps();
 }

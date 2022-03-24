@@ -24,7 +24,7 @@ extern "C" {
 #include "libavutil/imgutils.h"
 #include "libavutil/opt.h"
 #ifdef __cplusplus
-};
+}
 #endif
 #define BLOGW  true
 #define BLOGE  true
@@ -138,6 +138,7 @@ private:
 
     static const int MEDIA_INFO_BUFFERING_START = 0;
     static const int MEDIA_INFO_BUFFERING_END = 1;
+    static const int MEDIA_INFO_FPS = 2;
 
 
     int max_frame_buff_size = 20;
