@@ -1405,6 +1405,11 @@ void BipPlayer::msgLoop() {
                     pthread_create(&(prepareNextThreadId), nullptr, prepareNextVideoThread,
                                    this);//开启begin线程
                     break;
+                case MSG_PREPARE:
+                    inputPath = static_cast<char *>(processMsg->obj);
+                    pthread_create(&(prepareThreadId), nullptr, prepareVideoThread,
+                                   this);//开启begin线程
+                    break;
             }
             LOGE("process msg %x completed", processMsg->what);
             //消息处理完毕

@@ -52,6 +52,7 @@ extern "C" {
 #define MSG_RESET 0x237
 #define MSG_RELEASE 0x238
 #define MSG_PREPARE_NEXT 0x239
+#define MSG_PREPARE 0x240
 
 
 extern jclass defaultBIPPlayerClass;

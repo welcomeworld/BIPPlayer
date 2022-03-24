@@ -9,9 +9,10 @@ jint native_prepareAsync(JNIEnv *env, jobject instance, jstring inputPath_) {
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
     char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
     strcpy(cinputPath, inputPath);
-    bipPlayer->inputPath = cinputPath;
-    pthread_create(&(bipPlayer->prepareThreadId), nullptr, prepareVideoThread,
-                   bipPlayer);//开启begin线程
+    auto *message = new BIPMessage();
+    message->what = MSG_PREPARE;
+    message->obj = cinputPath;
+    bipPlayer->notifyMsg(message);
     env->ReleaseStringUTFChars(inputPath_, inputPath);
     return 0;
 }
