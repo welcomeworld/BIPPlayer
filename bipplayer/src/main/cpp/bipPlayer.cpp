@@ -306,9 +306,16 @@ void BipPlayer::showVideoPacket() {
             }
             //  rgb_frame是有画面数据
             auto *dst = static_cast<uint8_t *>(nativeWindowBuffer.bits);
+            //拿到一行有多少个字节 RGBA nativeWindow缓冲区中每一行长度不一定等于视频宽度
+            int destStride = nativeWindowBuffer.stride * 4;
             //像素数据的首地址
             uint8_t *src = rgb_frame->data[0];
-            memcpy(dst, src, frame->width * frame->height * 4);
+            //实际内存一行数量
+            int srcStride = rgb_frame->linesize[0];
+            for (int i = 0; i < frame->height; i++) {
+                //必须将rgb_frame的数据一行一行复制给nativewindow
+                memcpy(dst + i * destStride, src + i * srcStride, srcStride);
+            }
             ANativeWindow_unlockAndPost(nativeWindow);
             decodeEndTime = av_gettime();
             decodeSpendTime = decodeEndTime - decodeStartTime;
