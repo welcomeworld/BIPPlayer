@@ -428,7 +428,11 @@ void BipPlayer::reset() {
     videoClock = 0;
     audioClock = 0;
     fps = 0;
+    //todo 清空引用
     formatOps.clear();
+    playerOps.clear();
+    swsOps.clear();
+    codecOps.clear();
 }
 
 int avFormatInterrupt(void *ctx) {
@@ -467,7 +471,7 @@ void BipPlayer::prepare() {
         iterator++;
     }
     int prepareResult;
-    char *errorMsg = static_cast<char *>(av_malloc(1024));
+    char *errorMsg = static_cast<char *>(av_mallocz(1024));
     prepareResult = avformat_open_input(&avFormatContext, inputPath, nullptr, &dic);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
@@ -574,7 +578,7 @@ void BipPlayer::prepare() {
     //申请视频的AVPacket和AVFrame
     rgb_frame = av_frame_alloc();
     if (videoAvailable()) {
-        auto *out_buffer = (uint8_t *) av_malloc(
+        auto *out_buffer = (uint8_t *) av_mallocz(
                 av_image_get_buffer_size(AV_PIX_FMT_RGBA, avCodecContext->width,
                                          avCodecContext->height,
                                          1));
@@ -1095,7 +1099,7 @@ void BipPlayer::prepareNext() {
         iterator++;
     }
     int prepareResult;
-    char *errorMsg = static_cast<char *>(av_malloc(1024));
+    char *errorMsg = static_cast<char *>(av_mallocz(1024));
     if (nextIsDash) {
         LOGE("start dash prepare %s", dashInputPath);
         prepareResult = avformat_open_input(&nextAvFormatContext, dashInputPath, nullptr, &dic);
@@ -1175,7 +1179,7 @@ void BipPlayer::prepareNext() {
             postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, 233, nullptr);
             return;
         }
-        auto *out_buffer = (uint8_t *) av_malloc(
+        auto *out_buffer = (uint8_t *) av_mallocz(
                 av_image_get_buffer_size(AV_PIX_FMT_RGBA, nextAvCodecContext->width,
                                          nextAvCodecContext->height,
                                          1));
