@@ -7,7 +7,7 @@ BipPlayer *getNativePlayer(JNIEnv *env, jobject instance) {
 jint native_prepareAsync(JNIEnv *env, jobject instance, jstring inputPath_) {
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)+1));
     strcpy(cinputPath, inputPath);
     auto *message = new BIPMessage();
     message->what = MSG_PREPARE;
@@ -30,8 +30,8 @@ void native_setOption(JNIEnv *env, jobject instance, jint category, jstring jkey
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *key = env->GetStringUTFChars(jkey, nullptr);
     const char *value = env->GetStringUTFChars(jvalue, nullptr);
-    char *ckey = static_cast<char *>(malloc(strlen(key)));
-    char *cvalue = static_cast<char *>(malloc(strlen(value)));
+    char *ckey = static_cast<char *>(malloc(strlen(key)+1));
+    char *cvalue = static_cast<char *>(malloc(strlen(value)+1));
     strcpy(ckey, key);
     strcpy(cvalue, value);
     bipPlayer->setOption(category, ckey, cvalue);
@@ -114,7 +114,7 @@ void native_finalize(JNIEnv *env, jobject instance) {
 void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboolean dash) {
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)));
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)+1));
     strcpy(cinputPath, inputPath);
     auto *message = new BIPMessage();
     message->what = MSG_PREPARE_NEXT;
