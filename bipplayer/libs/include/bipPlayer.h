@@ -73,6 +73,10 @@ void *cacheVideoFrameThread(void *args);
 
 void *cacheAudioFrameThread(void *args);
 
+void yuvToARGB(AVFrame *sourceAVFrame, uint8_t *dst_rgba);
+
+bool matchYuv(int yuvFormat);
+
 enum PlayerState {
     STATE_RELEASE = 0,
     STATE_UN_DEFINE, ///< Undefined

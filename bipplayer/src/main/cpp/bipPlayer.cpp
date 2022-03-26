@@ -266,8 +266,12 @@ void BipPlayer::showVideoPacket() {
             }
             //转换成RGBA格式
             long scaleStartTime = av_gettime();
-            sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
-                      rgb_frame->data, rgb_frame->linesize);
+            if (matchYuv(frame->format)) {
+                yuvToARGB(frame, rgb_frame->data[0]);
+            } else {
+                sws_scale(swsContext, frame->data, frame->linesize, 0, frame->height,
+                          rgb_frame->data, rgb_frame->linesize);
+            }
             long scaleEndTime = av_gettime();
             LOGD("video scale spend time %ld when real fps %lf",
                  (scaleEndTime - scaleStartTime) / 1000,
@@ -285,6 +289,9 @@ void BipPlayer::showVideoPacket() {
                     delay = delay + diff;
                 }
             }
+            //配置nativeWindow
+            ANativeWindow_setBuffersGeometry(nativeWindow, frame->width,
+                                             frame->height, WINDOW_FORMAT_RGBA_8888);
             //上锁
             if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
                 //锁定窗口失败
@@ -299,16 +306,9 @@ void BipPlayer::showVideoPacket() {
             }
             //  rgb_frame是有画面数据
             auto *dst = static_cast<uint8_t *>(nativeWindowBuffer.bits);
-            //拿到一行有多少个字节 RGBA
-            int destStride = nativeWindowBuffer.stride * 4;
             //像素数据的首地址
             uint8_t *src = rgb_frame->data[0];
-            //实际内存一行数量
-            int srcStride = rgb_frame->linesize[0];
-            for (int i = 0; i < avCodecContext->height; i++) {
-                //将rgb_frame中每一行的数据复制给nativewindow
-                memcpy(dst + i * destStride, src + i * srcStride, srcStride);
-            }
+            memcpy(dst, src, frame->width * frame->height * 4);
             ANativeWindow_unlockAndPost(nativeWindow);
             decodeEndTime = av_gettime();
             decodeSpendTime = decodeEndTime - decodeStartTime;
@@ -340,11 +340,6 @@ void BipPlayer::setVideoSurface(ANativeWindow *window) {
         nativeWindow = nullptr;
     }
     nativeWindow = window;
-    if (avCodecContext != nullptr && nativeWindow != nullptr) {
-        //配置nativeWindow
-        ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
-                                         avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
-    }
 }
 
 void BipPlayer::postEventFromNative(int what, int arg1, int arg2, void *object) const {
@@ -545,11 +540,6 @@ void BipPlayer::prepare() {
             playState = STATE_ERROR;
             postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, 233, nullptr);
             return;
-        }
-        if (nativeWindow != nullptr) {
-            //配置nativeWindow
-            ANativeWindow_setBuffersGeometry(nativeWindow, avCodecContext->width,
-                                             avCodecContext->height, WINDOW_FORMAT_RGBA_8888);
         }
         fps = av_q2d(avFormatContext->streams[video_index]->avg_frame_rate);
         if (fps <= 0) {
@@ -1336,14 +1326,6 @@ void BipPlayer::prepareNext() {
         av_frame_free(&rgb_frame);
         rgb_frame = nullptr;
     }
-    if (nextVideoIndex != -1) {
-        if (nativeWindow != nullptr) {
-            //配置nativeWindow
-            ANativeWindow_setBuffersGeometry(nativeWindow, nextAvCodecContext->width,
-                                             nextAvCodecContext->height,
-                                             WINDOW_FORMAT_RGBA_8888);
-        }
-    }
     if (nextAudioIndex != -1 && audio_index == -1 && playState == STATE_PLAYING) {
         pthread_create(&audioPlayId, nullptr, playAudioThread, this);//开启begin线程
     }
@@ -1524,5 +1506,46 @@ void BipPlayer::destroyOpenSL() {
 }
 
 
+void yuvToARGB(AVFrame *sourceAVFrame, uint8_t *dst_rgba) {
+    switch (sourceAVFrame->format) {
+        case AV_PIX_FMT_YUV420P:
+            libyuv::I420ToABGR(sourceAVFrame->data[0], sourceAVFrame->linesize[0],
+                               sourceAVFrame->data[1], sourceAVFrame->linesize[1],
+                               sourceAVFrame->data[2], sourceAVFrame->linesize[2],
+                               dst_rgba, sourceAVFrame->width * 4,
+                               sourceAVFrame->width,
+                               sourceAVFrame->height);
+            break;
+        case AV_PIX_FMT_YUV422P:
+            libyuv::I422ToABGR(sourceAVFrame->data[0], sourceAVFrame->linesize[0],
+                               sourceAVFrame->data[1], sourceAVFrame->linesize[1],
+                               sourceAVFrame->data[2], sourceAVFrame->linesize[2],
+                               dst_rgba, sourceAVFrame->width * 4,
+                               sourceAVFrame->width,
+                               sourceAVFrame->height);
+            break;
+        case AV_PIX_FMT_YUV444P:
+            libyuv::I444ToABGR(sourceAVFrame->data[0], sourceAVFrame->linesize[0],
+                               sourceAVFrame->data[1], sourceAVFrame->linesize[1],
+                               sourceAVFrame->data[2], sourceAVFrame->linesize[2],
+                               dst_rgba, sourceAVFrame->width * 4,
+                               sourceAVFrame->width,
+                               sourceAVFrame->height);
+            break;
+        default:
+            break;
+    }
+}
+
+bool matchYuv(int yuvFormat) {
+    switch (yuvFormat) {
+        case AV_PIX_FMT_YUV420P:
+        case AV_PIX_FMT_YUV422P:
+        case AV_PIX_FMT_YUV444P:
+            return true;
+        default:
+            return false;
+    }
+}
 
 
