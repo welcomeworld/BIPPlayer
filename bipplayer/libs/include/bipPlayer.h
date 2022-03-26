@@ -12,6 +12,7 @@
 #include <android/log.h>
 #include <map>
 #include <sys/prctl.h>
+#include "libyuv.h"
 
 #ifdef __cplusplus
 extern "C" {
