@@ -449,8 +449,8 @@ int avFormatInterrupt(void *ctx) {
     long diffTime = calculateTime(interruptContext->readStartTime, currentTime);
     if (interruptContext->readStartTime.tv_sec != 0) {
         if (diffTime > 555) {
-            LOGE("interrupt because %ld time out", diffTime);
-            return 1;
+            LOGE("no interrupt because may cause seek fail");
+            return 0;
         }
     }
     return 0;
@@ -842,24 +842,20 @@ void BipPlayer::seekTo(long time) {
         baseClock = (double) (time) / 1000;
         audioClock = baseClock;
         videoClock = baseClock;
+        notifyInfo(MEDIA_INFO_BUFFERING_START);
+        interruptContext->audioBuffering = true;
+        av_seek_frame(avFormatContext, -1, av_rescale(time, AV_TIME_BASE, 1000),
+                      AVSEEK_FLAG_BACKWARD);
         if (audioAvailable()) {
             avcodec_flush_buffers(audioCodecContext);
-            av_seek_frame(avFormatContext, audio_index,
-                          (double) (time) / av_q2d(audioTimeBase) / 1000,
-                          AVSEEK_FLAG_BACKWARD);
         }
         if (videoAvailable()) {
             avcodec_flush_buffers(avCodecContext);
-            av_seek_frame(avFormatContext, video_index,
-                          (double) (time) / av_q2d(videoTimeBase) / 1000,
-                          AVSEEK_FLAG_BACKWARD);
         }
         clear(videoPacketQueue);
         clear(audioPacketQueue);
         clear(videoFrameQueue);
         clear(audioFrameQueue);
-        notifyInfo(MEDIA_INFO_BUFFERING_START);
-        interruptContext->audioBuffering = true;
         unLockAll();
         postEventFromNative(MEDIA_SEEK_COMPLETE, 0, 0, nullptr);
     }
