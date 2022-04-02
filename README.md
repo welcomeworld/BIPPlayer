@@ -15,3 +15,7 @@ allprojects {
     implementation 'com.github.welcomeworld:BIPPlayer:version'
 }
   ```
+## ToDo
+-边播边缓存（seek复用缓存）  
+-支持多种方式设置DataSource(复刻MediaPlayer)  
+-使用MediaCodeC硬解码
