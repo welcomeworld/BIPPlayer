@@ -2,14 +2,18 @@ package com.github.welcomeworld.bipplayer.sample;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.SeekBar;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -85,62 +89,33 @@ public class MainActivity extends AppCompatActivity {
         bipPlayer.setDisplay(binding.surface.getHolder());
         bipPlayer.setScreenOnWhilePlaying(true);
         bipPlayer.setOnBufferingUpdateListener((bp, var2) -> binding.seekBar.setSecondaryProgress(var2 * 10));
-        binding.videoPrepare.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao.mp4");
-                bipPlayer.setDataSource(file.getAbsolutePath());
+        binding.videoPrepare.setOnClickListener(v -> {
+            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao.mp4");
+            bipPlayer.setDataSource(file.getAbsolutePath());
 //                bipPlayer.setDataSource("http://stream4.iqilu.com/ksd/video/2020/02/17/c5e02420426d58521a8783e754e9f4e6.mp4");
 //                bipPlayer.setDataSource("https://stream7.iqilu.com/10339/upload_transcode/202002/18/20200218114723HDu3hhxqIT.mp4");
-                bipPlayer.prepareAsync();
-            }
+            bipPlayer.prepareAsync();
         });
-        binding.videoQuality.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao_videoonly.mp4");
-                bipPlayer.setDataSource(file.getAbsolutePath());
-                bipPlayer.prepareQualityAsync(file.getAbsolutePath());
-            }
+        binding.videoQuality.setOnClickListener(v -> {
+            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao_videoonly.mp4");
+            bipPlayer.setDataSource(file.getAbsolutePath());
+            bipPlayer.prepareQualityAsync(file.getAbsolutePath());
         });
-        binding.videoNext.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "tescc.m3u8");
-                bipPlayer.setDataSource(file.getAbsolutePath());
-                bipPlayer.prepareNextAsync(file.getAbsolutePath());
-            }
+        binding.videoNext.setOnClickListener(v -> {
+            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "tescc.m3u8");
+            bipPlayer.setDataSource(file.getAbsolutePath());
+            bipPlayer.prepareNextAsync(file.getAbsolutePath());
         });
 
-        binding.videoStart.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                bipPlayer.start();
-            }
-        });
-        binding.videoPause.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                bipPlayer.pause();
-            }
-        });
-        binding.videoStop.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                bipPlayer.stop();
-            }
-        });
-        binding.videoReset.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                bipPlayer.reset();
-            }
-        });
-        binding.videoRelease.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                bipPlayer.release();
-            }
+        binding.videoStart.setOnClickListener(v -> bipPlayer.start());
+        binding.videoPause.setOnClickListener(v -> bipPlayer.pause());
+        binding.videoStop.setOnClickListener(v -> bipPlayer.stop());
+        binding.videoReset.setOnClickListener(v -> bipPlayer.reset());
+        binding.videoRelease.setOnClickListener(v -> bipPlayer.release());
+        binding.videoFile.setOnClickListener(v -> {
+            Intent intent = new Intent("android.intent.action.GET_CONTENT");
+            intent.setType("video/*");
+            startActivityForResult(intent, 233);
         });
         new Thread(() -> {
             while (bipPlayer != null) {
@@ -192,6 +167,24 @@ public class MainActivity extends AppCompatActivity {
         if (bipPlayer != null) {
             bipPlayer.release();
             bipPlayer = null;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (requestCode == 233) {
+            if (resultCode == RESULT_OK && data != null) {
+                Uri uri = data.getData();
+                Log.e("file select :", uri.toString());
+                bipPlayer.stop();
+                bipPlayer.setDataSource(this, uri);
+                bipPlayer.prepareAsync();
+            } else {
+                Log.e("file select :", "fail");
+            }
+        } else {
+            Log.e("file select :", "code error");
+            super.onActivityResult(requestCode, resultCode, data);
         }
     }
 }
