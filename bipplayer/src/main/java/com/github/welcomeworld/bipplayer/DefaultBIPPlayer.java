@@ -1,17 +1,28 @@
 package com.github.welcomeworld.bipplayer;
 
+import android.content.ContentResolver;
+import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.ParcelFileDescriptor;
+import android.provider.Settings;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
 import androidx.annotation.NonNull;
 
+import java.io.FileDescriptor;
 import java.lang.ref.WeakReference;
+import java.util.Map;
 
 public final class DefaultBIPPlayer implements BIPPlayer {
+    private static final String TAG = "DefaultBIPPlayer";
     private static final int MEDIA_PREPARED = 1;
     private static final int MEDIA_PLAYBACK_COMPLETE = 2;
     private static final int MEDIA_BUFFERING_UPDATE = 3;
@@ -32,7 +43,6 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     private SurfaceHolder mSurfaceHolder;
     private boolean mScreenOnWhilePlaying = true;
-    private String mDataSource;
     private final EventHandler mEventHandler;
     private OnPreparedListener mOnPreparedListener;
     private OnCompletionListener mOnCompletionListener;
@@ -62,7 +72,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void prepareAsync() {
-        _prepareAsync(mDataSource);
+        _prepareAsync();
     }
 
     @Override
@@ -74,7 +84,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void setDataSource(String path) {
-        mDataSource = path;
+        _setDataSource(path);
     }
 
     @Override
@@ -222,7 +232,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
             mOnBufferingUpdateListener.onBufferingUpdate(this, percent);
     }
 
-    public native int _prepareAsync(String path);
+    public native void _prepareAsync();
 
     private native void _setVideoSurface(Surface surface);
 
@@ -244,7 +254,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
             if (bip == null) {
                 return;
             }
-            Log.e("DefaultBIPPlayer", msg.what + "arg1:" + msg.arg1 + "arg2:" + msg.arg2);
+            Log.e(TAG, msg.what + "arg1:" + msg.arg1 + "arg2:" + msg.arg2);
             switch (msg.what) {
                 case MEDIA_BUFFERING_UPDATE:
                     bip.notifyOnBufferingUpdate(msg.arg1);
@@ -318,4 +328,73 @@ public final class DefaultBIPPlayer implements BIPPlayer {
      */
     @Override
     public native int getFps();
+
+    @Override
+    public void setDataSource(String path, Map<String, String> headers) {
+        if (headers != null && !headers.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                sb.append(entry.getKey());
+                sb.append(":");
+                String value = entry.getValue();
+                if (!TextUtils.isEmpty(value))
+                    sb.append(entry.getValue());
+                sb.append("\r\n");
+                setOption(OPT_CATEGORY_FORMAT, "headers", sb.toString());
+            }
+        }
+        setDataSource(path);
+    }
+
+    @Override
+    public void setDataSource(Context context, Uri uri) {
+        setDataSource(context, uri, null);
+    }
+
+    @Override
+    public void setDataSource(Context context, Uri uri, Map<String, String> headers) {
+        final String scheme = uri.getScheme();
+        if (ContentResolver.SCHEME_FILE.equals(scheme)) {
+            setDataSource(uri.getPath());
+            return;
+        } else if (ContentResolver.SCHEME_CONTENT.equals(scheme)
+                && Settings.AUTHORITY.equals(uri.getAuthority())) {
+            // Redirect ringtones to go directly to underlying provider
+            Uri tempUri = RingtoneManager.getActualDefaultRingtoneUri(context,
+                    RingtoneManager.getDefaultType(uri));
+            if (tempUri != null) {
+                uri = tempUri;
+            }
+        }
+
+        ContentResolver resolver = context.getContentResolver();
+        try (AssetFileDescriptor fd = resolver.openAssetFileDescriptor(uri, "r")) {
+            if (fd != null) {
+                setDataSource(fd.getFileDescriptor());
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+        setDataSource(uri.toString(), headers);
+    }
+
+    @Override
+    public void setDataSource(FileDescriptor fd) {
+        try (ParcelFileDescriptor pfd = ParcelFileDescriptor.dup(fd)) {
+            _setDataSourceFd(pfd.getFd());
+        } catch (Exception ignore) {
+        }
+    }
+
+    /**
+     * ignore offset and length
+     */
+    @Override
+    public void setDataSource(FileDescriptor fd, long offset, long length) {
+        setDataSource(fd);
+    }
+
+    public native void _setDataSource(String path);
+
+    public native void _setDataSourceFd(int fd);
 }

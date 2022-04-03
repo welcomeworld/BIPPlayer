@@ -1,7 +1,12 @@
 package com.github.welcomeworld.bipplayer;
 
+import android.content.Context;
+import android.net.Uri;
 import android.view.Surface;
 import android.view.SurfaceHolder;
+
+import java.io.FileDescriptor;
+import java.util.Map;
 
 public interface BIPPlayer {
     void prepareAsync();
@@ -11,6 +16,16 @@ public interface BIPPlayer {
     void setSurface(Surface surface);
 
     void setDataSource(String path);
+
+    void setDataSource(String path, Map<String, String> headers);
+
+    void setDataSource(Context context, Uri uri);
+
+    void setDataSource(Context context, Uri uri, Map<String, String> headers);
+
+    void setDataSource(FileDescriptor fd);
+
+    void setDataSource(FileDescriptor fd, long offset, long length);
 
     void setOnErrorListener(OnErrorListener listener);
 

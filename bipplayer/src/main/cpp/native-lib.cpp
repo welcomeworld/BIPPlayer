@@ -4,17 +4,9 @@ BipPlayer *getNativePlayer(JNIEnv *env, jobject instance) {
     return (BipPlayer *) (intptr_t) env->GetLongField(instance, nativePlayerRefId);
 }
 
-jint native_prepareAsync(JNIEnv *env, jobject instance, jstring inputPath_) {
+void native_prepareAsync(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)+1));
-    strcpy(cinputPath, inputPath);
-    auto *message = new BIPMessage();
-    message->what = MSG_PREPARE;
-    message->obj = cinputPath;
-    bipPlayer->notifyMsg(message);
-    env->ReleaseStringUTFChars(inputPath_, inputPath);
-    return 0;
+    bipPlayer->notifyMsg(MSG_PREPARE);
 }
 
 void setVideoSurface(JNIEnv *env, jobject instance, jobject surface) {
@@ -30,8 +22,8 @@ void native_setOption(JNIEnv *env, jobject instance, jint category, jstring jkey
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *key = env->GetStringUTFChars(jkey, nullptr);
     const char *value = env->GetStringUTFChars(jvalue, nullptr);
-    char *ckey = static_cast<char *>(malloc(strlen(key)+1));
-    char *cvalue = static_cast<char *>(malloc(strlen(value)+1));
+    char *ckey = static_cast<char *>(malloc(strlen(key) + 1));
+    char *cvalue = static_cast<char *>(malloc(strlen(value) + 1));
     strcpy(ckey, key);
     strcpy(cvalue, value);
     bipPlayer->setOption(category, ckey, cvalue);
@@ -114,7 +106,7 @@ void native_finalize(JNIEnv *env, jobject instance) {
 void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboolean dash) {
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath)+1));
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
     strcpy(cinputPath, inputPath);
     auto *message = new BIPMessage();
     message->what = MSG_PREPARE_NEXT;
@@ -129,8 +121,31 @@ jint native_getFps(JNIEnv *env, jobject instance) {
     return bipPlayer->getFps();
 }
 
+void native_setDataSource(JNIEnv *env, jobject instance, jstring inputPath_) {
+    auto *bipPlayer = getNativePlayer(env, instance);
+    const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
+    strcpy(cinputPath, inputPath);
+    auto *message = new BIPMessage();
+    message->what = MSG_SET_DATA_SOURCE;
+    message->obj = cinputPath;
+    bipPlayer->notifyMsg(message);
+    env->ReleaseStringUTFChars(inputPath_, inputPath);
+}
+
+void native_setDataSourceFd(JNIEnv *env, jobject instance, jint fd) {
+    auto *bipPlayer = getNativePlayer(env, instance);
+    char *cinputPath = static_cast<char *>(calloc(1, 28));
+    int dupFd = dup(fd);
+    snprintf(cinputPath, sizeof(cinputPath), "fd:%d", dupFd);
+    auto *message = new BIPMessage();
+    message->what = MSG_SET_DATA_SOURCE;
+    message->obj = cinputPath;
+    bipPlayer->notifyMsg(message);
+}
+
 static JNINativeMethod methods[] = {
-        {"_prepareAsync",      "(Ljava/lang/String;)I",                    (void *) native_prepareAsync},
+        {"_prepareAsync",      "()V",                                      (void *) native_prepareAsync},
         {"_setVideoSurface",   "(Landroid/view/Surface;)V",                (void *) setVideoSurface},
         {"native_setup",       "(Ljava/lang/Object;)V",                    (void *) native_setup},
         {"getDuration",        "()J",                                      (void *) getDuration},
@@ -147,7 +162,9 @@ static JNINativeMethod methods[] = {
         {"native_finalize",    "()V",                                      (void *) native_finalize},
         {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V", (void *) native_setOption},
         {"_prepare_next",      "(Ljava/lang/String;Z)V",                   (void *) native_prepare_next},
-        {"getFps",             "()I",                                      (void *) native_getFps}
+        {"getFps",             "()I",                                      (void *) native_getFps},
+        {"_setDataSource",     "(Ljava/lang/String;)V",                    (void *) native_setDataSource},
+        {"_setDataSourceFd",   "(I)V",                                     (void *) native_setDataSourceFd}
 };
 
 void loadJavaId(JNIEnv *env) {

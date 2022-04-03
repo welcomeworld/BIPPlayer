@@ -13,6 +13,7 @@
 #include <map>
 #include <sys/prctl.h>
 #include "libyuv.h"
+#include "fdAVIOContext.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +55,7 @@ extern "C" {
 #define MSG_RELEASE 0x238
 #define MSG_PREPARE_NEXT 0x239
 #define MSG_PREPARE 0x240
+#define MSG_SET_DATA_SOURCE 0x241
 
 
 extern jclass defaultBIPPlayerClass;
@@ -166,6 +168,8 @@ private:
 
     InterruptContext *interruptContext;
     InterruptContext *nextInterruptContext;
+
+    FdAVIOContext *fdAvioContext = nullptr;
 
     //创建引擎
     void createEngine();

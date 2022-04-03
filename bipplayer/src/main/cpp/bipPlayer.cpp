@@ -403,6 +403,10 @@ void BipPlayer::stop() {
     videoClock = 0;
     audioClock = 0;
     fps = 0;
+    if (interruptContext->audioBuffering) {
+        interruptContext->audioBuffering = false;
+        notifyInfo(MEDIA_INFO_BUFFERING_END);
+    }
 }
 
 void BipPlayer::reset() {
@@ -435,6 +439,10 @@ void BipPlayer::reset() {
     videoClock = 0;
     audioClock = 0;
     fps = 0;
+    if (interruptContext->audioBuffering) {
+        interruptContext->audioBuffering = false;
+        notifyInfo(MEDIA_INFO_BUFFERING_END);
+    }
     //todo 清空引用
     formatOps.clear();
     playerOps.clear();
@@ -457,7 +465,7 @@ int avFormatInterrupt(void *ctx) {
 }
 
 void BipPlayer::prepare() {
-    if (playState != STATE_UN_DEFINE) {
+    if (playState != STATE_UN_DEFINE || inputPath == nullptr) {
         postEventFromNative(MEDIA_ERROR, ERROR_STATE_ILLEGAL, 0, nullptr);
         return;
     }
@@ -479,6 +487,11 @@ void BipPlayer::prepare() {
     }
     int prepareResult;
     char *errorMsg = static_cast<char *>(av_mallocz(1024));
+    if (!strncmp(inputPath, "fd:", 3)) {
+        fdAvioContext = new FdAVIOContext();
+        fdAvioContext->openFromDescriptor(atoi(inputPath + 3), "rb");
+        avFormatContext->pb = fdAvioContext->getAvioContext();
+    }
     prepareResult = avformat_open_input(&avFormatContext, inputPath, nullptr, &dic);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
@@ -1103,11 +1116,22 @@ void BipPlayer::prepareNext() {
     }
     int prepareResult;
     char *errorMsg = static_cast<char *>(av_mallocz(1024));
+    FdAVIOContext *nextFdAvioContext = nullptr;
     if (nextIsDash) {
         LOGE("start dash prepare %s", dashInputPath);
+        if (!strncmp(dashInputPath, "fd:", 3)) {
+            nextFdAvioContext = new FdAVIOContext();
+            nextFdAvioContext->openFromDescriptor(atoi(dashInputPath + 3), "rb");
+            nextAvFormatContext->pb = nextFdAvioContext->getAvioContext();
+        }
         prepareResult = avformat_open_input(&nextAvFormatContext, dashInputPath, nullptr, &dic);
     } else {
         LOGE("start next prepare %s", nextInputPath);
+        if (!strncmp(nextInputPath, "fd:", 3)) {
+            nextFdAvioContext = new FdAVIOContext();
+            nextFdAvioContext->openFromDescriptor(atoi(nextInputPath + 3), "rb");
+            nextAvFormatContext->pb = nextFdAvioContext->getAvioContext();
+        }
         prepareResult = avformat_open_input(&nextAvFormatContext, nextInputPath, nullptr, &dic);
     }
     if (prepareResult != 0) {
@@ -1364,6 +1388,8 @@ void BipPlayer::prepareNext() {
     swap(audioPacketQueue, nextAudioPacketQueue);
     swap(videoFrameQueue, nextVideoFrameQueue);
     swap(audioFrameQueue, nextAudioFrameQueue);
+    //切换自定义Fd上下文
+    fdAvioContext = nextFdAvioContext;
     unLockAll();
     //切换播放器完成
     av_freep(&errorMsg);
@@ -1410,9 +1436,11 @@ void BipPlayer::msgLoop() {
                                    this);//开启begin线程
                     break;
                 case MSG_PREPARE:
-                    inputPath = static_cast<char *>(processMsg->obj);
                     pthread_create(&(prepareThreadId), nullptr, prepareVideoThread,
                                    this);//开启begin线程
+                    break;
+                case MSG_SET_DATA_SOURCE:
+                    inputPath = static_cast<char *>(processMsg->obj);
                     break;
             }
             LOGE("process msg %x completed", processMsg->what);
@@ -1489,6 +1517,10 @@ void BipPlayer::freeContexts() {
     if (swsContext) {
         sws_freeContext(swsContext);
         swsContext = nullptr;
+    }
+    if (fdAvioContext != nullptr) {
+        delete fdAvioContext;
+        fdAvioContext = nullptr;
     }
 }
 
