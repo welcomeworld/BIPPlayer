@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.10.2)
 
 project("bipplayer")
+aux_source_directory(. DIR_SRC)
 add_library(
         native-lib
         SHARED
-        native-lib.cpp bipPlayer.cpp)
+        ${DIR_SRC})
 
 find_library( # Sets the name of the path variable.
         log-lib
