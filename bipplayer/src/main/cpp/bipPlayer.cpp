@@ -1605,6 +1605,18 @@ void yuvToARGB(AVFrame *sourceAVFrame, uint8_t *dst_rgba) {
                                sourceAVFrame->width,
                                sourceAVFrame->height);
             break;
+        case AV_PIX_FMT_NV12:
+            libyuv::NV12ToABGR(sourceAVFrame->data[0], sourceAVFrame->linesize[0],
+                               sourceAVFrame->data[1], sourceAVFrame->linesize[1],
+                               dst_rgba, sourceAVFrame->width * 4,
+                               sourceAVFrame->width, sourceAVFrame->height);
+            break;
+        case AV_PIX_FMT_NV21:
+            libyuv::NV21ToABGR(sourceAVFrame->data[0], sourceAVFrame->linesize[0],
+                               sourceAVFrame->data[1], sourceAVFrame->linesize[1],
+                               dst_rgba, sourceAVFrame->width * 4,
+                               sourceAVFrame->width, sourceAVFrame->height);
+            break;
         default:
             break;
     }
@@ -1615,6 +1627,8 @@ bool matchYuv(int yuvFormat) {
         case AV_PIX_FMT_YUV420P:
         case AV_PIX_FMT_YUV422P:
         case AV_PIX_FMT_YUV444P:
+        case AV_PIX_FMT_NV12:
+        case AV_PIX_FMT_NV21:
             return true;
         default:
             return false;
