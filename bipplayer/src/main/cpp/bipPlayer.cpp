@@ -245,10 +245,12 @@ void BipPlayer::showVideoPacket() {
                 videoFrameQueue.pop();
                 interruptContext->videoSize = videoFrameQueue.size();
                 delay = 1.0 / fps;
-                if (frame->best_effort_timestamp == AV_NOPTS_VALUE) {
-                    videoClock += delay;
-                } else {
+                if (frame->best_effort_timestamp != AV_NOPTS_VALUE) {
                     videoClock = frame->best_effort_timestamp * av_q2d(videoTimeBase);
+                } else if (frame->pts != AV_NOPTS_VALUE) {
+                    videoClock = frame->pts * av_q2d(videoTimeBase);
+                } else {
+                    videoClock += delay;
                 }
                 if (!audioAvailable()) {
                     baseClock = videoClock;
@@ -932,24 +934,44 @@ void BipPlayer::start() {
 }
 
 void BipPlayer::cacheVideo() {
-    AVFormatContext *rootFormatContext;
+    AVFormatContext *rootFormatContext = nullptr;
     long decodeSpendTime;
     int64_t startTime;
     int64_t endTime;
     int sendResult;
     int decodeFrameCount = 0;
+    AVPacket *lastCachePacket = nullptr;
+    std::queue<AVFrame *> tempVideoFrameQueue{};
     while (playState >= STATE_PREPARING) {
-        pthread_mutex_lock(&videoMutex);
+        if (pthread_mutex_lock(&videoMutex)) {
+            continue;
+        }
         if (playState < STATE_PREPARING) {
             pthread_mutex_unlock(&videoMutex);
             break;
         }
         if (videoPacketQueue.empty()) {
-            pthread_cond_wait(&videoCond, &videoMutex);
+            LOGD("video decode wait because packet empty");
+            if (pthread_cond_wait(&videoCond, &videoMutex)) {
+                continue;
+            }
         }
         if (!videoPacketQueue.empty()) {
-            AVPacket *packet = videoPacketQueue.front();
-            videoPacketQueue.pop();
+            AVPacket *packet = nullptr;
+            if (lastCachePacket != nullptr) {
+                if (rootFormatContext == avFormatContext) {
+                    packet = lastCachePacket;
+                    lastCachePacket = nullptr;
+                } else {
+                    av_packet_free(&lastCachePacket);
+                    lastCachePacket = nullptr;
+                    packet = videoPacketQueue.front();
+                    videoPacketQueue.pop();
+                }
+            } else {
+                packet = videoPacketQueue.front();
+                videoPacketQueue.pop();
+            }
             rootFormatContext = avFormatContext;
             pthread_mutex_unlock(&videoMutex);
             pthread_mutex_lock(&videoCacheMutex);
@@ -963,18 +985,28 @@ void BipPlayer::cacheVideo() {
             gettimeofday(&decodeStartTime, nullptr);
             AVFrame *frame = av_frame_alloc();
             sendResult = avcodec_send_packet(avCodecContext, packet);
+            if (sendResult != 0) {
+                lastCachePacket = packet;
+            } else {
+                av_packet_free(&packet);
+            }
             gettimeofday(&decodeEndTime, nullptr);
             startTime = av_gettime();
-            int receiveResult = avcodec_receive_frame(avCodecContext, frame);
+            while (!avcodec_receive_frame(avCodecContext, frame)) {
+                tempVideoFrameQueue.push(frame);
+                frame = av_frame_alloc();
+            }
             endTime = av_gettime();
             decodeSpendTime = calculateTime(decodeStartTime, decodeEndTime);
-            LOGD("decode send %d with time %ld and receive %d with time %ld", sendResult,
-                 decodeSpendTime, receiveResult, (endTime - startTime) / 1000);
+            LOGD("decode send %d with time %ld and receive %ld with time %ld", sendResult,
+                 decodeSpendTime, tempVideoFrameQueue.size(), (endTime - startTime) / 1000);
             pthread_mutex_unlock(&videoCacheMutex);
-            av_packet_free(&packet);
-            if (!receiveResult) {
+            if (!tempVideoFrameQueue.empty()) {
                 pthread_mutex_lock(&videoFrameMutex);
-                videoFrameQueue.push(frame);
+                while (!tempVideoFrameQueue.empty()) {
+                    videoFrameQueue.push(tempVideoFrameQueue.front());
+                    tempVideoFrameQueue.pop();
+                }
                 interruptContext->videoSize = videoFrameQueue.size();
                 if (!audioAvailable()) {
                     if (videoFrameQueue.size() >= min_frame_buff_size) {
@@ -992,11 +1024,13 @@ void BipPlayer::cacheVideo() {
                     pthread_cond_signal(&videoFrameCond);
                 }
                 if (videoFrameQueue.size() >= max_frame_buff_size) {
-                    pthread_cond_wait(&videoFrameEmptyCond, &videoFrameMutex);
+                    LOGD("video decode wait because frame max");
+                    if (pthread_cond_wait(&videoFrameEmptyCond, &videoFrameMutex)) {
+                        continue;
+                    }
                 }
                 pthread_mutex_unlock(&videoFrameMutex);
             } else {
-                LOGW("free video frame %p", &frame);
                 av_frame_free(&frame);
             }
         } else {
