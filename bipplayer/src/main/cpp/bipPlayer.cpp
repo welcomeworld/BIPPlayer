@@ -89,7 +89,13 @@ void BipPlayer::setOption(int category, const char *key, const char *value) {
             codecOps[key] = value;
             break;
         case OPT_CATEGORY_PLAYER:
-            playerOps[key] = value;
+            if (!strcmp(key, MEDIACODEC)) {
+                mediacodec = strcmp("0", value);
+            } else if (!strcmp(key, START_ON_PREPARED)) {
+                startOnPrepared = strcmp("0", value);
+            }
+            free((void *) key);
+            free((void *) value);
             break;
         case OPT_CATEGORY_SWS:
             swsOps[key] = value;
@@ -447,7 +453,6 @@ void BipPlayer::reset() {
     }
     //todo 清空引用
     formatOps.clear();
-    playerOps.clear();
     swsOps.clear();
     codecOps.clear();
 }
@@ -536,8 +541,16 @@ void BipPlayer::prepare() {
             codecIterator++;
         }
         //打开视频解码器
-        AVCodec *avCodec = avcodec_find_decoder(
-                avFormatContext->streams[video_index]->codecpar->codec_id);
+        AVCodec *avCodec = nullptr;
+        AVCodecID videoCodecID = avFormatContext->streams[video_index]->codecpar->codec_id;
+        if (mediacodec) {
+            avCodec = getMediaCodec(videoCodecID);
+            if (avCodec == nullptr) {
+                avCodec = avcodec_find_decoder(videoCodecID);
+            }
+        } else {
+            avCodec = avcodec_find_decoder(videoCodecID);
+        }
         avCodecContext = avcodec_alloc_context3(avCodec);
         avcodec_parameters_to_context(avCodecContext,
                                       avFormatContext->streams[video_index]->codecpar);
@@ -552,13 +565,16 @@ void BipPlayer::prepare() {
         }
         prepareResult = avcodec_open2(avCodecContext, avCodec, &codecDic);
         if (prepareResult != 0) {
-            LOGE("打开解码失败");
+            av_strerror(prepareResult, errorMsg, 1024);
+            LOGE("打开解码失败: %s", errorMsg);
             playState = STATE_ERROR;
             postEventFromNative(MEDIA_ERROR, ERROR_PREPARE_FAILED, prepareResult, nullptr);
             return;
         } else {
-            LOGE("解码成功:%s threadType: %d threadCount: %d", avCodec->name,
-                 avCodecContext->thread_type, avCodecContext->thread_count);
+            LOGE("解码成功:%s threadType: %d threadCount: %d pix_format %d",
+                 avCodec->name,
+                 avCodecContext->thread_type, avCodecContext->thread_count,
+                 avCodecContext->pix_fmt);
         }
         if (avCodecContext->pix_fmt == -1 || avCodecContext->width == 0 ||
             avCodecContext->height == 0) {
@@ -757,11 +773,8 @@ void BipPlayer::unLockAll() {
 void BipPlayer::notifyPrepared() {
     playState = STATE_PREPARED;
     postEventFromNative(MEDIA_PREPARED, 0, 0, nullptr);
-    auto iterator = playerOps.find("start-on-prepared");
-    if (iterator != playerOps.end()) {
-        if (iterator->second != nullptr && strcmp("1", iterator->second) == 0) {
-            start();
-        }
+    if (startOnPrepared) {
+        start();
     }
 }
 
@@ -1632,6 +1645,19 @@ bool matchYuv(int yuvFormat) {
             return true;
         default:
             return false;
+    }
+}
+
+AVCodec *getMediaCodec(AVCodecID codecID) {
+    switch (codecID) {
+        case AV_CODEC_ID_H264:
+            return avcodec_find_decoder_by_name("h264_mediacodec");
+        case AV_CODEC_ID_HEVC:
+            return avcodec_find_decoder_by_name("hevc_mediacodec");
+        case AV_CODEC_ID_MPEG4:
+            return avcodec_find_decoder_by_name("mpeg4_mediacodec");
+        default:
+            return nullptr;
     }
 }
 

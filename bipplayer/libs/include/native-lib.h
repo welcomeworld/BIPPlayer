@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 #include <pthread.h>
+#include <libavcodec/jni.h>
 #ifdef __cplusplus
 };
 #endif

@@ -186,6 +186,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     cls = (*env).FindClass("com/github/welcomeworld/bipplayer/DefaultBIPPlayer");
     (*env).RegisterNatives(cls, methods, sizeof(methods) / sizeof(JNINativeMethod));
     staticVm = vm;
+    av_jni_set_java_vm(vm, 0);
     loadJavaId(env);
     return JNI_VERSION_1_6;
 }

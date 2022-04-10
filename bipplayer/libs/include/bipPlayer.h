@@ -14,6 +14,7 @@
 #include <sys/prctl.h>
 #include "libyuv.h"
 #include "fdAVIOContext.h"
+#include "bipPlayerOptions.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -78,6 +79,8 @@ void *cacheAudioFrameThread(void *args);
 void yuvToARGB(AVFrame *sourceAVFrame, uint8_t *dst_rgba);
 
 bool matchYuv(int yuvFormat);
+
+AVCodec *getMediaCodec(AVCodecID codecID);
 
 enum PlayerState {
     STATE_RELEASE = 0,
@@ -160,7 +163,6 @@ private:
 
     std::map<const char *, const char *, ptrCmp> formatOps;
     std::map<const char *, const char *, ptrCmp> codecOps;
-    std::map<const char *, const char *, ptrCmp> playerOps;
     std::map<const char *, const char *, ptrCmp> swsOps;
     std::queue<BIPMessage *> msgQueue;
     pthread_mutex_t msgMutex{};
@@ -170,6 +172,9 @@ private:
     InterruptContext *nextInterruptContext;
 
     FdAVIOContext *fdAvioContext = nullptr;
+
+    bool mediacodec = false;
+    bool startOnPrepared = false;
 
     //创建引擎
     void createEngine();
