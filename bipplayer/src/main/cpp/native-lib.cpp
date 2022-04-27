@@ -121,6 +121,10 @@ jint native_getFps(JNIEnv *env, jobject instance) {
     return bipPlayer->getFps();
 }
 
+void message_delete_str_callback(void *object) {
+    free((void *) object);
+}
+
 void native_setDataSource(JNIEnv *env, jobject instance, jstring inputPath_) {
     auto *bipPlayer = getNativePlayer(env, instance);
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
@@ -129,6 +133,7 @@ void native_setDataSource(JNIEnv *env, jobject instance, jstring inputPath_) {
     auto *message = new BIPMessage();
     message->what = MSG_SET_DATA_SOURCE;
     message->obj = cinputPath;
+    message->free_l = message_delete_str_callback;
     bipPlayer->notifyMsg(message);
     env->ReleaseStringUTFChars(inputPath_, inputPath);
 }
@@ -141,6 +146,7 @@ void native_setDataSourceFd(JNIEnv *env, jobject instance, jint fd) {
     auto *message = new BIPMessage();
     message->what = MSG_SET_DATA_SOURCE;
     message->obj = cinputPath;
+    message->free_l = message_delete_str_callback;
     bipPlayer->notifyMsg(message);
 }
 

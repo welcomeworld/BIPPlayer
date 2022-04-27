@@ -1472,7 +1472,6 @@ void BipPlayer::msgLoop() {
                     release();
                     break;
                 case MSG_PREPARE_NEXT:
-                    //todo 释放obj内存
                     if (processMsg->arg1) {
                         dashInputPath = static_cast<char *>(processMsg->obj);
                     } else {
@@ -1491,7 +1490,7 @@ void BipPlayer::msgLoop() {
                     break;
             }
             LOGE("process msg %x completed", processMsg->what);
-            //消息处理完毕
+            //消息处理完毕 obj的释放自己处理
             delete processMsg;
         } else {
             pthread_cond_wait(&msgCond, &msgMutex);
@@ -1502,6 +1501,10 @@ void BipPlayer::msgLoop() {
     while (!msgQueue.empty()) {
         BIPMessage *processMsg = msgQueue.front();
         msgQueue.pop();
+        if (processMsg->free_l != nullptr) {
+            processMsg->free_l(processMsg->obj);
+            processMsg->free_l = nullptr;
+        }
         delete processMsg;
     }
 }
