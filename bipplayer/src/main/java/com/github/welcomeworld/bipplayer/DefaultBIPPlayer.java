@@ -397,4 +397,8 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     public native void _setDataSource(String path);
 
     public native void _setDataSourceFd(int fd);
+
+    public native float getSpeed();
+
+    public native void setSpeed(float speed);
 }

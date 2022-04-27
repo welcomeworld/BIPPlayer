@@ -153,7 +153,14 @@ public class MainActivity extends AppCompatActivity {
                 bipPlayer.seekTo(seekBar.getProgress() * bipPlayer.getDuration() / 1000);
             }
         });
-//        bipPlayer.setOnPreparedListener(BIPPlayer::start);
+        binding.videoSpeed025.setOnClickListener(v -> bipPlayer.setSpeed(0.25f));
+        binding.videoSpeed05.setOnClickListener(v -> bipPlayer.setSpeed(0.5f));
+        binding.videoSpeed075.setOnClickListener(v -> bipPlayer.setSpeed(0.75f));
+        binding.videoSpeed1.setOnClickListener(v -> bipPlayer.setSpeed(1f));
+        binding.videoSpeed125.setOnClickListener(v -> bipPlayer.setSpeed(1.25f));
+        binding.videoSpeed15.setOnClickListener(v -> bipPlayer.setSpeed(1.5f));
+        binding.videoSpeed175.setOnClickListener(v -> bipPlayer.setSpeed(1.75f));
+        binding.videoSpeed2.setOnClickListener(v -> bipPlayer.setSpeed(2));
     }
 
     private static String formatTime(long time) {

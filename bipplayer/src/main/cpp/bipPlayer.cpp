@@ -62,6 +62,7 @@ void BipPlayer::release() {
     pthread_mutex_destroy(&msgMutex);
     delete interruptContext;
     delete nextInterruptContext;
+    delete soundtouch;
     destroyOpenSL();
 }
 
@@ -178,32 +179,47 @@ int BipPlayer::getPcm() {
                 break;
             }
         }
-        if (audioAvailable() && !audioFrameQueue.empty() && playState == STATE_PLAYING) {
+        while (audioAvailable() && !audioFrameQueue.empty() && playState == STATE_PLAYING) {
             AVFrame *audioFrame = audioFrameQueue.front();
             audioFrameQueue.pop();
             interruptContext->audioSize = audioFrameQueue.size();
-            int outSample = swr_convert(audioSwrContext, &audioBuffer, 4096,
+            int outSample = swr_convert(audioSwrContext, &audioBuffer, 4096 * 2,
                                         (const uint8_t **) (audioFrame->data),
                                         audioFrame->nb_samples);
+            int size = 0;
+            soundtouch->putSamples(reinterpret_cast<const soundtouch::SAMPLETYPE *>(audioBuffer),
+                                   outSample);
+            int soundOutSample = 0;
+            do {
+                soundOutSample = soundtouch->receiveSamples(
+                        reinterpret_cast<soundtouch::SAMPLETYPE *>(audioBuffer + size),
+                        OUT_SAMPLE_RATE / OUT_CHANNEL_NUMBER);
+                size += soundOutSample * OUT_CHANNEL_NUMBER * BYTES_PER_SAMPLE;
+            } while (soundOutSample != 0);
+            if (size == 0) {
+                av_frame_free(&audioFrame);
+                continue;
+            }
             pthread_cond_signal(&audioFrameEmptyCond);
             pthread_mutex_unlock(&audioFrameMutex);
-            int size = av_samples_get_buffer_size(nullptr, outChannelsNumber,
-                                                  outSample,
-                                                  AV_SAMPLE_FMT_S16, 1);
+//            不使用soundTouch则取消注释并将上面soundTouch部分注释掉
+//            size = av_samples_get_buffer_size(nullptr, OUT_CHANNEL_NUMBER,
+//                                              outSample,
+//                                              AV_SAMPLE_FMT_S16, 1);
             if (audioFrame->pts != AV_NOPTS_VALUE) {
                 //这一帧的起始时间
                 audioClock = audioFrame->pts * av_q2d(audioTimeBase);
                 //这一帧数据的时间
-                double time = size / ((double) 44100 * 2 * 2);
+                double time =
+                        size / ((double) OUT_SAMPLE_RATE * OUT_CHANNEL_NUMBER * BYTES_PER_SAMPLE);
                 //最终音频时钟
                 audioClock = time + audioClock;
                 baseClock = audioClock;
             }
             av_frame_free(&audioFrame);
             return size;
-        } else {
-            pthread_mutex_unlock(&audioFrameMutex);
         }
+        pthread_mutex_unlock(&audioFrameMutex);
     }
     return 0;
 }
@@ -250,20 +266,22 @@ void BipPlayer::showVideoPacket() {
                 frame = videoFrameQueue.front();
                 videoFrameQueue.pop();
                 interruptContext->videoSize = videoFrameQueue.size();
-                delay = 1.0 / fps;
+                double realHopeFps = fps * playSpeed;
+                delay = 1.0 / realHopeFps;
                 if (frame->best_effort_timestamp != AV_NOPTS_VALUE) {
                     videoClock = frame->best_effort_timestamp * av_q2d(videoTimeBase);
                 } else if (frame->pts != AV_NOPTS_VALUE) {
                     videoClock = frame->pts * av_q2d(videoTimeBase);
                 } else {
-                    videoClock += delay;
+                    videoClock += 1.0 / fps;
                 }
                 if (!audioAvailable()) {
                     baseClock = videoClock;
                 }
                 diff = videoClock - baseClock;
                 //视频过于落后，不再转换格式，直接丢帧
-                if (diff < -0.35 && !videoFrameQueue.empty()) {
+                if ((diff < -0.35 || (diff < -0.1 && realHopeFps > 80)) &&
+                    !videoFrameQueue.empty()) {
                     LOGE("video slow to skip a frame with diff %lf when fps %d", diff, fps);
                     av_frame_free(&frame);
                     frame = nullptr;
@@ -411,6 +429,7 @@ void BipPlayer::stop() {
     videoClock = 0;
     audioClock = 0;
     fps = 0;
+    setPlaySpeed(1.0f);
     if (interruptContext->audioBuffering) {
         interruptContext->audioBuffering = false;
         notifyInfo(MEDIA_INFO_BUFFERING_END);
@@ -447,6 +466,7 @@ void BipPlayer::reset() {
     videoClock = 0;
     audioClock = 0;
     fps = 0;
+    setPlaySpeed(1.0f);
     if (interruptContext->audioBuffering) {
         interruptContext->audioBuffering = false;
         notifyInfo(MEDIA_INFO_BUFFERING_END);
@@ -599,15 +619,14 @@ void BipPlayer::prepare() {
         avcodec_open2(audioCodecContext, audioCodec, nullptr);
         //申请音频的AVPacket和AVFrame
         audioSwrContext = swr_alloc();
-        swr_alloc_set_opts(audioSwrContext, outChLayout, AV_SAMPLE_FMT_S16,
-                           44100,
+        swr_alloc_set_opts(audioSwrContext, OUT_CHANNEL_LAYOUT, AV_SAMPLE_FMT_S16,
+                           OUT_SAMPLE_RATE,
                            audioCodecContext->channel_layout, audioCodecContext->sample_fmt,
                            audioCodecContext->sample_rate, 0,
                            nullptr);
         swr_init(audioSwrContext);
     }
-    audioBuffer = static_cast<uint8_t *>(av_mallocz(4096 * 4));
-    outChannelsNumber = av_get_channel_layout_nb_channels(outChLayout);
+    audioBuffer = static_cast<uint8_t *>(av_mallocz(1024 * 48));
 
 
 
@@ -800,6 +819,7 @@ BipPlayer::BipPlayer() {
     createEngine();
     createMixVolume();
     createPlayer();
+    initSoundTouch();
     pthread_mutex_init(&videoMutex, nullptr);
     pthread_mutex_init(&videoCacheMutex, nullptr);
     pthread_cond_init(&videoCond, nullptr);
@@ -1296,8 +1316,8 @@ void BipPlayer::prepareNext() {
         avcodec_open2(nextAudioCodecContext, audioCodec, nullptr);
 
         nextAudioSwrContext = swr_alloc();
-        swr_alloc_set_opts(nextAudioSwrContext, outChLayout, AV_SAMPLE_FMT_S16,
-                           44100,
+        swr_alloc_set_opts(nextAudioSwrContext, OUT_CHANNEL_LAYOUT, AV_SAMPLE_FMT_S16,
+                           OUT_SAMPLE_RATE,
                            nextAudioCodecContext->channel_layout, nextAudioCodecContext->sample_fmt,
                            nextAudioCodecContext->sample_rate, 0,
                            nullptr);
@@ -1592,6 +1612,23 @@ void BipPlayer::destroyOpenSL() {
         engineObject = nullptr;
         engineEngine = nullptr;
     }
+}
+
+void BipPlayer::initSoundTouch() {
+    soundtouch = new soundtouch::SoundTouch();
+    soundtouch->setSampleRate(OUT_SAMPLE_RATE);
+    soundtouch->setChannels(OUT_CHANNEL_NUMBER);
+    soundtouch->setSetting(SETTING_USE_QUICKSEEK, 1);
+}
+
+void BipPlayer::setPlaySpeed(float speed) {
+    if (speed <= 0) {
+        speed = 0.25;
+    } else if (speed >= 4) {
+        speed = 4;
+    }
+    playSpeed = speed;
+    soundtouch->setTempo(speed);
 }
 
 

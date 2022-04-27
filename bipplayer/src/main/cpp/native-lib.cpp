@@ -150,6 +150,19 @@ void native_setDataSourceFd(JNIEnv *env, jobject instance, jint fd) {
     bipPlayer->notifyMsg(message);
 }
 
+void native_setSpeed(JNIEnv *env, jobject instance, jfloat speed) {
+    auto *bipPlayer = getNativePlayer(env, instance);
+    bipPlayer->setPlaySpeed(speed);
+}
+
+jfloat native_getSpeed(JNIEnv *env, jobject instance) {
+    auto *bipPlayer = getNativePlayer(env, instance);
+    if (bipPlayer != nullptr) {
+        return bipPlayer->playSpeed;
+    }
+    return 1;
+}
+
 static JNINativeMethod methods[] = {
         {"_prepareAsync",      "()V",                                      (void *) native_prepareAsync},
         {"_setVideoSurface",   "(Landroid/view/Surface;)V",                (void *) setVideoSurface},
@@ -170,7 +183,9 @@ static JNINativeMethod methods[] = {
         {"_prepare_next",      "(Ljava/lang/String;Z)V",                   (void *) native_prepare_next},
         {"getFps",             "()I",                                      (void *) native_getFps},
         {"_setDataSource",     "(Ljava/lang/String;)V",                    (void *) native_setDataSource},
-        {"_setDataSourceFd",   "(I)V",                                     (void *) native_setDataSourceFd}
+        {"_setDataSourceFd",   "(I)V",                                     (void *) native_setDataSourceFd},
+        {"getSpeed",           "()F",                                      (void *) native_getSpeed},
+        {"setSpeed",           "(F)V",                                     (void *) native_setSpeed}
 };
 
 void loadJavaId(JNIEnv *env) {

@@ -15,6 +15,7 @@
 #include "libyuv.h"
 #include "fdAVIOContext.h"
 #include "bipPlayerOptions.h"
+#include "SoundTouch.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,6 +49,16 @@ extern "C" {
 #else
 #define LOGD(FORMAT, ...) logd(FORMAT,##__VA_ARGS__)
 #endif
+
+//音频重采样声道
+#define OUT_CHANNEL_LAYOUT AV_CH_LAYOUT_STEREO
+//音频重采样声道数
+#define OUT_CHANNEL_NUMBER 2
+//音频重采样率
+#define OUT_SAMPLE_RATE 44100
+//每个样本字节数
+#define BYTES_PER_SAMPLE 2
+
 #define MSG_SEEK 0x233
 #define MSG_STOP 0x234
 #define MSG_START 0x235
@@ -122,7 +133,7 @@ public:
     int arg2 = 0;
     void *obj = nullptr;
 
-    void (*free_l)(void *obj);
+    void (*free_l)(void *obj) = nullptr;
 
     int what = 0;
 };
@@ -176,6 +187,8 @@ private:
     bool mediacodec = false;
     bool startOnPrepared = false;
 
+    soundtouch::SoundTouch *soundtouch = nullptr;
+
     //创建引擎
     void createEngine();
 
@@ -184,6 +197,8 @@ private:
 
     //创建播放器
     void createPlayer();
+
+    void initSoundTouch();
 
     int getPcm();
 
@@ -265,6 +280,8 @@ public:
 
     int getFps() const;
 
+    void setPlaySpeed(float speed);
+
 public:
 
     //播放状态
@@ -282,6 +299,7 @@ public:
     pthread_mutex_t avOpsMutex{};
     double baseClock{}; //基准时钟，单位位秒
     int fps = 0;
+    float playSpeed = 1.0f;
 
     //video
     AVCodecContext *avCodecContext = nullptr;
@@ -328,10 +346,6 @@ public:
     pthread_cond_t audioFrameEmptyCond{};
     //音频重采样缓冲区
     uint8_t *audioBuffer{};
-    //音频重采样声道
-    uint64_t outChLayout = AV_CH_LAYOUT_STEREO;
-    //音频重采样通道数
-    int outChannelsNumber = 2;
     int audio_index = -1;
     AVRational audioTimeBase{};
     double audioClock{};//音频时钟,单位秒
