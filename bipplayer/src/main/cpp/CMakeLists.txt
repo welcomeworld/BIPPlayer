@@ -2,10 +2,11 @@ cmake_minimum_required(VERSION 3.10.2)
 
 project("bipplayer")
 aux_source_directory(. DIR_SRC)
+aux_source_directory(./soundtouch DIR_SRC_SOUND_TOUCH)
 add_library(
         native-lib
         SHARED
-        ${DIR_SRC})
+        ${DIR_SRC} ${DIR_SRC_SOUND_TOUCH})
 
 find_library( # Sets the name of the path variable.
         log-lib
@@ -15,6 +16,7 @@ find_library( # Sets the name of the path variable.
 
 set(DIR ${CMAKE_SOURCE_DIR}/../../../libs)
 include_directories(${DIR}/include)
+include_directories(${DIR}/include/soundtouch)
 add_library(avcodec
         SHARED
         IMPORTED)
