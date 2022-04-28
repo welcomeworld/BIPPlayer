@@ -92,4 +92,8 @@ public interface BIPPlayer {
     void setOnInfoListener(OnInfoListener listener);
 
     int getFps();
+
+    float getSpeed();
+
+    void setSpeed(float speed);
 }
