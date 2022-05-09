@@ -2,11 +2,14 @@ package com.github.welcomeworld.bipplayer.sample;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.View;
@@ -19,6 +22,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.github.welcomeworld.bipplayer.DefaultBIPPlayer;
+import com.github.welcomeworld.bipplayer.DefaultBipPublisher;
 import com.github.welcomeworld.bipplayer.sample.databinding.ActivityMainBinding;
 
 import java.io.File;
@@ -95,6 +99,28 @@ public class MainActivity extends AppCompatActivity {
 //                bipPlayer.setDataSource("http://stream4.iqilu.com/ksd/video/2020/02/17/c5e02420426d58521a8783e754e9f4e6.mp4");
 //                bipPlayer.setDataSource("https://stream7.iqilu.com/10339/upload_transcode/202002/18/20200218114723HDu3hhxqIT.mp4");
             bipPlayer.prepareAsync();
+        });
+        binding.videoPublishCamera.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+        binding.videoPublishFile.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent("android.intent.action.GET_CONTENT");
+                intent.setType("video/*");
+                startActivityForResult(intent, 234);
+            }
+        });
+        binding.videoPublishUrl.setText("rtmp://192.168.0.101/live/test_rtmp");
+        binding.videoPlayUrl.setText("rtmp://192.168.0.101/live/test_rtmp");
+        binding.videoPlayRtmp.setOnClickListener(v -> {
+            if (binding.videoPlayUrl.getText() != null) {
+                bipPlayer.setDataSource(binding.videoPlayUrl.getText().toString());
+                bipPlayer.prepareAsync();
+            }
         });
         binding.videoQuality.setOnClickListener(v -> {
             File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao_videoonly.mp4");
@@ -188,6 +214,27 @@ public class MainActivity extends AppCompatActivity {
                 bipPlayer.stop();
                 bipPlayer.setDataSource(this, uri);
                 bipPlayer.prepareAsync();
+            } else {
+                Log.e("file select :", "fail");
+            }
+        } else if (requestCode == 234) {
+            if (resultCode == RESULT_OK && data != null) {
+                Uri uri = data.getData();
+                Log.e("file select :", uri.toString());
+                bipPlayer.stop();
+                if (binding.videoPlayUrl.getText() != null) {
+                    ContentResolver resolver = getContentResolver();
+                    try (AssetFileDescriptor fd = resolver.openAssetFileDescriptor(uri, "r")) {
+                        if (fd != null) {
+                            try (ParcelFileDescriptor pfd = ParcelFileDescriptor.dup(fd.getFileDescriptor())) {
+//                                bipPlayer._setOutputPath("fd:" + pfd.detachFd(), getExternalFilesDir(null)+"/test_publish.flv");
+                                new DefaultBipPublisher()._setOutputPath("fd:" + pfd.detachFd(), binding.videoPublishUrl.getText().toString());
+                            } catch (Exception ignore) {
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
             } else {
                 Log.e("file select :", "fail");
             }

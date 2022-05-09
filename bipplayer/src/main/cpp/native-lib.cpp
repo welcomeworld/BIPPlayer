@@ -138,6 +138,23 @@ void native_setDataSource(JNIEnv *env, jobject instance, jstring inputPath_) {
     env->ReleaseStringUTFChars(inputPath_, inputPath);
 }
 
+void native_setOutputPath(JNIEnv *env, jobject instance, jstring inputPath_, jstring output_) {
+//    auto *bipPlayer = getNativePlayer(env, instance);
+    const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
+    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
+    strcpy(cinputPath, inputPath);
+    const char *output = env->GetStringUTFChars(output_, nullptr);
+    char *coutput = static_cast<char *>(malloc(strlen(output) + 1));
+    strcpy(coutput, output);
+    BipPublisher *bipPublisher = new BipPublisher();
+    bipPublisher->inputPath = cinputPath;
+    bipPublisher->outputPath = coutput;
+    pthread_create(&(bipPublisher->publishThreadId), nullptr, publishThread,
+                   bipPublisher);//开启begin线程
+    env->ReleaseStringUTFChars(inputPath_, inputPath);
+    env->ReleaseStringUTFChars(output_, output);
+}
+
 void native_setDataSourceFd(JNIEnv *env, jobject instance, jint fd) {
     auto *bipPlayer = getNativePlayer(env, instance);
     char *cinputPath = static_cast<char *>(calloc(1, 28));
@@ -188,6 +205,10 @@ static JNINativeMethod methods[] = {
         {"setSpeed",           "(F)V",                                     (void *) native_setSpeed}
 };
 
+static JNINativeMethod publishMethods[] = {
+        {"_setOutputPath", "(Ljava/lang/String;Ljava/lang/String;)V", (void *) native_setOutputPath}
+};
+
 void loadJavaId(JNIEnv *env) {
     defaultBIPPlayerClass = (jclass) env->NewGlobalRef(
             env->FindClass("com/github/welcomeworld/bipplayer/DefaultBIPPlayer"));
@@ -205,7 +226,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_ERR;
     }
     cls = (*env).FindClass("com/github/welcomeworld/bipplayer/DefaultBIPPlayer");
+    jclass publishCls = (*env).FindClass("com/github/welcomeworld/bipplayer/DefaultBipPublisher");
     (*env).RegisterNatives(cls, methods, sizeof(methods) / sizeof(JNINativeMethod));
+    (*env).RegisterNatives(publishCls, publishMethods,
+                           sizeof(publishMethods) / sizeof(JNINativeMethod));
     staticVm = vm;
     av_jni_set_java_vm(vm, 0);
     loadJavaId(env);

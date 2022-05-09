@@ -10,6 +10,7 @@
 #include <android/native_window_jni.h>
 #include "bipPlayer.h"
 #include <unistd.h>
+#include "BipPublisher.h"
 
 #ifdef __cplusplus
 extern "C" {

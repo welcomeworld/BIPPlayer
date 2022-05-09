@@ -9,13 +9,13 @@
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 #include <android/native_window_jni.h>
-#include <android/log.h>
 #include <map>
 #include <sys/prctl.h>
 #include "libyuv.h"
 #include "fdAVIOContext.h"
 #include "bipPlayerOptions.h"
 #include "SoundTouch.h"
+#include "BipLog.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,25 +30,7 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-#define BLOGW  true
-#define BLOGE  true
-#define BLOGD  true
 
-#if BLOGE
-#define LOGE(FORMAT, ...) __android_log_print(ANDROID_LOG_ERROR,"DefaultBIPPlayerNative",FORMAT,##__VA_ARGS__)
-#else
-#define LOGE(FORMAT, ...) loge(FORMAT,##__VA_ARGS__)
-#endif
-#if BLOGW
-#define LOGW(FORMAT, ...) __android_log_print(ANDROID_LOG_WARN,"DefaultBIPPlayerNative",FORMAT,##__VA_ARGS__)
-#else
-#define LOGW(FORMAT, ...) logw(FORMAT,##__VA_ARGS__)
-#endif
-#if BLOGD
-#define LOGD(FORMAT, ...) __android_log_print(ANDROID_LOG_DEBUG,"DefaultBIPPlayerNative",FORMAT,##__VA_ARGS__)
-#else
-#define LOGD(FORMAT, ...) logd(FORMAT,##__VA_ARGS__)
-#endif
 
 //音频重采样声道
 #define OUT_CHANNEL_LAYOUT AV_CH_LAYOUT_STEREO
