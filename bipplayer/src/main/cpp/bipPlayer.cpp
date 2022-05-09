@@ -316,8 +316,10 @@ void BipPlayer::showVideoPacket() {
                 }
             }
             //配置nativeWindow
-            ANativeWindow_setBuffersGeometry(nativeWindow, frame->width,
-                                             frame->height, WINDOW_FORMAT_RGBA_8888);
+            if (nativeWindow != nullptr) {
+                ANativeWindow_setBuffersGeometry(nativeWindow, frame->width,
+                                                 frame->height, WINDOW_FORMAT_RGBA_8888);
+            }
             //上锁
             if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
                 //锁定窗口失败
@@ -886,6 +888,9 @@ void clear(std::queue<AVFrame *> &q) {
 
 void BipPlayer::seekTo(long time) {
     if (playState >= STATE_PREPARED) {
+        if (duration <= 0) {
+            return;
+        }
         lockAll();
         baseClock = (double) (time) / 1000;
         audioClock = baseClock;
