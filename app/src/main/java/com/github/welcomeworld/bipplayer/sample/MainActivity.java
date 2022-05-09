@@ -129,7 +129,9 @@ public class MainActivity extends AppCompatActivity {
                     binding.duration.setText(formatTime(duration));
                     binding.videoHeight.setText("height:" + bipPlayer.getVideoHeight() + "px");
                     binding.videoWidth.setText("width:" + bipPlayer.getVideoWidth() + "px");
-                    binding.seekBar.setProgress((int) (position * 1000 / duration));
+                    if (duration != 0) {
+                        binding.seekBar.setProgress((int) (position * 1000 / duration));
+                    }
                 });
                 try {
                     Thread.sleep(500);
