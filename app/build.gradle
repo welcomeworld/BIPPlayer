@@ -2,13 +2,9 @@ plugins {
     id 'com.android.application'
     id 'bugly'
 }
-Properties localProperties = new Properties()
-localProperties.load(project.rootProject.file('local.properties').newDataInputStream())
-def buglyAppId = localProperties.getProperty("buglyAppId")
-def buglyAppKey = localProperties.getProperty("buglyAppKey")
 bugly {
-    appId = buglyAppId // 注册时分配的App ID
-    appKey = buglyAppKey // 注册时分配的App Key
+    appId = '94d91fbe10' // 注册时分配的App ID
+    appKey = '0aba428f-92ce-42e3-9acf-f1a37aff0f6e' // 注册时分配的App Key
 }
 
 android {
@@ -21,7 +17,7 @@ android {
         targetSdkVersion 30
         versionCode 1
         versionName "1.0"
-        buildConfigField "String", "buglyAppId", "\"${buglyAppId}\""
+        buildConfigField "String", "buglyAppId", "\"94d91fbe10\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
