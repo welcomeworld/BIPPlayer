@@ -23,394 +23,406 @@
 
     </FrameLayout>
 
-    <LinearLayout
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:orientation="horizontal">
+        android:layout_height="match_parent">
 
-        <TextView
-            android:id="@+id/position"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="15dp"
-            android:gravity="center"
-            tools:text="00:00" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-        <SeekBar
-            android:id="@+id/seekBar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_weight="1"
-            android:max="1000" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/duration"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginRight="15dp"
-            android:gravity="center"
-            tools:text="24:32" />
-    </LinearLayout>
+                <TextView
+                    android:id="@+id/position"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="15dp"
+                    android:gravity="center"
+                    tools:text="00:00" />
 
-    <TextView
-        android:id="@+id/video_width"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:textColor="@color/black"
-        android:textSize="14sp" />
+                <SeekBar
+                    android:id="@+id/seekBar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_weight="1"
+                    android:max="1000" />
 
-    <TextView
-        android:id="@+id/video_height"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_marginTop="8dp"
-        android:textColor="@color/black"
-        android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/duration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="15dp"
+                    android:gravity="center"
+                    tools:text="24:32" />
+            </LinearLayout>
 
-    <TextView
-        android:id="@+id/video_fps"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_marginTop="8dp"
-        android:textColor="@color/black"
-        android:textSize="14sp"
-        tools:text="60fps" />
+            <TextView
+                android:id="@+id/video_width"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:textColor="@color/black"
+                android:textSize="14sp" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal">
+            <TextView
+                android:id="@+id/video_height"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/black"
+                android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_prepare"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginEnd="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="prepare"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            <TextView
+                android:id="@+id/video_fps"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/black"
+                android:textSize="14sp"
+                tools:text="60fps" />
 
-        <TextView
-            android:id="@+id/video_start"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="start"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/video_pause"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="pause"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_prepare"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginEnd="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="prepare"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_stop"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="stop"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_start"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="start"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_reset"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="reset"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_pause"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="pause"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_release"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="release"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
-    </LinearLayout>
+                <TextView
+                    android:id="@+id/video_stop"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="stop"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/video_reset"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="reset"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_quality"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="quality"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_release"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="release"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
-        <TextView
-            android:id="@+id/video_next"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="next"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/video_file"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="File"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_quality"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="quality"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_speed2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="2"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
-    </LinearLayout>
+                <TextView
+                    android:id="@+id/video_next"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="next"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/video_file"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="File"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_speed0.25"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="0.25"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_speed2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="2"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
-        <TextView
-            android:id="@+id/video_speed0.5"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="0.5"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/video_speed0.75"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="0.75"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_speed0.25"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="0.25"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_speed1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="1"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_speed0.5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="0.5"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_speed1.25"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="1.25"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_speed0.75"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="0.75"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_speed1.5"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="1.5"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/video_speed1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="1"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/video_speed1.75"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="1.75"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
-    </LinearLayout>
+                <TextView
+                    android:id="@+id/video_speed1.25"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="1.25"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/video_speed1.5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="1.5"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
 
-        <EditText
-            android:id="@+id/video_play_url"
-            android:layout_width="0dp"
-            android:layout_height="54dp"
-            android:layout_weight="1" />
+                <TextView
+                    android:id="@+id/video_speed1.75"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="1.75"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
-        <TextView
-            android:id="@+id/video_play_rtmp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="拉流"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
-    </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:orientation="horizontal">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+                <EditText
+                    android:id="@+id/video_play_url"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_weight="1" />
 
-        <EditText
-            android:id="@+id/video_publish_url"
-            android:layout_width="0dp"
-            android:layout_height="54dp"
-            android:layout_weight="1" />
-    </LinearLayout>
+                <TextView
+                    android:id="@+id/video_play_rtmp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="拉流"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/video_publish_file"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="publish File"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+                <EditText
+                    android:id="@+id/video_publish_url"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
 
-        <TextView
-            android:id="@+id/video_publish_camera"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="#999999"
-            android:gravity="center"
-            android:padding="8dp"
-            android:text="publish Camera"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
-    </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/video_publish_file"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="publish File"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/video_publish_camera"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="#999999"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="publish Camera"
+                    android:textColor="@color/black"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

@@ -103,7 +103,11 @@ public class MainActivity extends AppCompatActivity {
         binding.videoPublishCamera.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
+                if (binding.videoPublishUrl.getText() != null) {
+                    Intent cameraIntent = new Intent(MainActivity.this, CameraActivity.class);
+                    cameraIntent.putExtra("publishUrl", binding.videoPublishUrl.getText().toString());
+                    startActivity(cameraIntent);
+                }
             }
         });
         binding.videoPublishFile.setOnClickListener(new View.OnClickListener() {
@@ -222,13 +226,13 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = data.getData();
                 Log.e("file select :", uri.toString());
                 bipPlayer.stop();
-                if (binding.videoPlayUrl.getText() != null) {
+                if (binding.videoPublishUrl.getText() != null) {
                     ContentResolver resolver = getContentResolver();
                     try (AssetFileDescriptor fd = resolver.openAssetFileDescriptor(uri, "r")) {
                         if (fd != null) {
                             try (ParcelFileDescriptor pfd = ParcelFileDescriptor.dup(fd.getFileDescriptor())) {
 //                                bipPlayer._setOutputPath("fd:" + pfd.detachFd(), getExternalFilesDir(null)+"/test_publish.flv");
-                                new DefaultBipPublisher()._setOutputPath("fd:" + pfd.detachFd(), binding.videoPublishUrl.getText().toString());
+                                new DefaultBipPublisher().prepare("fd:" + pfd.detachFd(), binding.videoPublishUrl.getText().toString());
                             } catch (Exception ignore) {
                             }
                         }
