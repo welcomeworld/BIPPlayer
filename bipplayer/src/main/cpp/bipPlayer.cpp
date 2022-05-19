@@ -485,12 +485,19 @@ int avFormatInterrupt(void *ctx) {
     gettimeofday(&currentTime, nullptr);
     long diffTime = calculateTime(interruptContext->readStartTime, currentTime);
     if (interruptContext->readStartTime.tv_sec != 0) {
-        if (diffTime > 555) {
-            LOGE("no interrupt because may cause seek fail");
-            return 0;
+        if (diffTime > 5555) {
+            return 1;
         }
     }
     return 0;
+}
+
+void protocolHook(const char *inputPath, AVDictionary **dic) {
+    if (av_stristart(inputPath, "rtmp", nullptr)) {
+        av_dict_set(dic, "timeout", nullptr, 0);
+    } else if (av_stristart(inputPath, "rtsp", nullptr)) {
+        av_dict_set(dic, "timeout", nullptr, 0);
+    }
 }
 
 void BipPlayer::prepare() {
@@ -514,6 +521,7 @@ void BipPlayer::prepare() {
         av_dict_set(&dic, iterator->first, iterator->second, 0);
         iterator++;
     }
+    protocolHook(inputPath, &dic);
     int prepareResult;
     char *errorMsg = static_cast<char *>(av_mallocz(1024));
     if (!strncmp(inputPath, "fd:", 3)) {
@@ -521,6 +529,7 @@ void BipPlayer::prepare() {
         fdAvioContext->openFromDescriptor(atoi(inputPath + 3), "rb");
         avFormatContext->pb = fdAvioContext->getAvioContext();
     }
+    gettimeofday(&(interruptContext->readStartTime), nullptr);
     prepareResult = avformat_open_input(&avFormatContext, inputPath, nullptr, &dic);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
@@ -529,6 +538,7 @@ void BipPlayer::prepare() {
         LOGE("open input error %s", errorMsg);
         return;
     }
+    gettimeofday(&(interruptContext->readStartTime), nullptr);
     prepareResult = avformat_find_stream_info(avFormatContext, nullptr);
     if (prepareResult != 0) {
         playState = STATE_ERROR;
@@ -718,6 +728,8 @@ void BipPlayer::prepare() {
                 pthread_cond_signal(&audioCond);
                 pthread_mutex_unlock(&audioMutex);
             }
+        } else if (readResult == AVERROR_EOF) {
+            //todo 处理流读完清空（seek处理）
         } else {
             av_usleep(50000);
         }

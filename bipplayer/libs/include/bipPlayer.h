@@ -27,6 +27,7 @@ extern "C" {
 #include <pthread.h>
 #include "libavutil/imgutils.h"
 #include "libavutil/opt.h"
+#include "libavutil/avstring.h"
 #ifdef __cplusplus
 }
 #endif
