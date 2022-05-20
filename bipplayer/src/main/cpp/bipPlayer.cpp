@@ -485,7 +485,7 @@ int avFormatInterrupt(void *ctx) {
     gettimeofday(&currentTime, nullptr);
     long diffTime = calculateTime(interruptContext->readStartTime, currentTime);
     if (interruptContext->readStartTime.tv_sec != 0) {
-        if (diffTime > 5555) {
+        if (diffTime > 4000) {
             return 1;
         }
     }
@@ -730,6 +730,7 @@ void BipPlayer::prepare() {
             }
         } else if (readResult == AVERROR_EOF) {
             //todo 处理流读完清空（seek处理）
+            av_usleep(50000);
         } else {
             av_usleep(50000);
         }
