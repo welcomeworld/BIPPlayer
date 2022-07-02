@@ -290,6 +290,16 @@ void loadJavaId(JNIEnv *env) {
     nativePublisherRefId = env->GetFieldID(publishCls, "nativePublisherRef", "J");
 }
 
+void custom_log(void *ptr, int level, const char *fmt, va_list vl) {
+    if (level == AV_LOG_ERROR) {
+        __android_log_vprint(ANDROID_LOG_ERROR, FFMPEG_LOG_TAG, fmt, vl);
+    } else if (level == AV_LOG_WARNING) {
+        __android_log_vprint(ANDROID_LOG_WARN, FFMPEG_LOG_TAG, fmt, vl);
+    } else {
+        __android_log_vprint(ANDROID_LOG_DEBUG, FFMPEG_LOG_TAG, fmt, vl);
+    }
+}
+
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     JNIEnv *env = nullptr;
     jclass cls;
@@ -305,5 +315,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     staticVm = vm;
     av_jni_set_java_vm(vm, 0);
     loadJavaId(env);
+    av_log_set_callback(custom_log);
     return JNI_VERSION_1_6;
 }
