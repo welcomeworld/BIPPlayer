@@ -209,6 +209,8 @@ private:
 
     void destroyOpenSL();
 
+    void showRGBFrame();
+
 public:
 
     void showVideoPacket();
@@ -288,6 +290,8 @@ public:
     AVCodecContext *avCodecContext = nullptr;
     SwsContext *swsContext{};
     ANativeWindow *nativeWindow = nullptr;
+    //视频缓冲区
+    ANativeWindow_Buffer nativeWindowBuffer;
     int video_index = -1;
     //视频Packet队列
     std::queue<AVPacket *> videoPacketQueue;

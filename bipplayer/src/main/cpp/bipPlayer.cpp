@@ -226,8 +226,6 @@ int BipPlayer::getPcm() {
 
 void BipPlayer::showVideoPacket() {
     postEventFromNative(MEDIA_PLAY_STATE_CHANGE, 1, 0, nullptr);
-    //视频缓冲区
-    ANativeWindow_Buffer nativeWindowBuffer;
     double delay         //线程休眠时间
     , diff   //音频帧与视频帧相差时间
     , sync_threshold; //音视频差距界限
@@ -315,36 +313,9 @@ void BipPlayer::showVideoPacket() {
                     delay = delay + diff;
                 }
             }
-            //配置nativeWindow
-            if (nativeWindow != nullptr) {
-                ANativeWindow_setBuffersGeometry(nativeWindow, frame->width,
-                                                 frame->height, WINDOW_FORMAT_RGBA_8888);
-            }
-            //上锁
-            if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
-                //锁定窗口失败
-                decodeEndTime = av_gettime();
-                decodeSpendTime = decodeEndTime - decodeStartTime;
-                realSleepTime = (long) (delay * 1000000) - decodeSpendTime;
-                if (realSleepTime > 1000) {
-                    av_usleep(realSleepTime);
-                }
-                av_frame_free(&frame);
-                continue;
-            }
-            //  rgb_frame是有画面数据
-            auto *dst = static_cast<uint8_t *>(nativeWindowBuffer.bits);
-            //拿到一行有多少个字节 RGBA nativeWindow缓冲区中每一行长度不一定等于视频宽度
-            int destStride = nativeWindowBuffer.stride * 4;
-            //像素数据的首地址
-            uint8_t *src = rgb_frame->data[0];
-            //实际内存一行数量
-            int srcStride = rgb_frame->linesize[0];
-            for (int i = 0; i < frame->height; i++) {
-                //必须将rgb_frame的数据一行一行复制给nativewindow
-                memcpy(dst + i * destStride, src + i * srcStride, srcStride);
-            }
-            ANativeWindow_unlockAndPost(nativeWindow);
+            rgb_frame->width = frame->width;
+            rgb_frame->height = frame->height;
+            showRGBFrame();
             decodeEndTime = av_gettime();
             decodeSpendTime = decodeEndTime - decodeStartTime;
             realSleepTime = (long) (delay * 1000000) - decodeSpendTime;
@@ -375,6 +346,7 @@ void BipPlayer::setVideoSurface(ANativeWindow *window) {
         nativeWindow = nullptr;
     }
     nativeWindow = window;
+    showRGBFrame();
 }
 
 void BipPlayer::postEventFromNative(int what, int arg1, int arg2, void *object) const {
@@ -1649,6 +1621,35 @@ void BipPlayer::setPlaySpeed(float speed) {
     soundtouch->setTempo(speed);
 }
 
+void BipPlayer::showRGBFrame() {
+    if (nativeWindow == nullptr || rgb_frame == nullptr) {
+        return;
+    }
+    //配置nativeWindow
+    if (nativeWindow != nullptr) {
+        ANativeWindow_setBuffersGeometry(nativeWindow, rgb_frame->width,
+                                         rgb_frame->height, WINDOW_FORMAT_RGBA_8888);
+    }
+    //上锁
+    if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
+        //锁定窗口失败
+        return;
+    }
+
+    //  rgb_frame是有画面数据
+    auto *dst = static_cast<uint8_t *>(nativeWindowBuffer.bits);
+    //拿到一行有多少个字节 RGBA nativeWindow缓冲区中每一行长度不一定等于视频宽度
+    int destStride = nativeWindowBuffer.stride * 4;
+    //像素数据的首地址
+    uint8_t *src = rgb_frame->data[0];
+    //实际内存一行数量
+    int srcStride = rgb_frame->linesize[0];
+    for (int i = 0; i < rgb_frame->height; i++) {
+        //必须将rgb_frame的数据一行一行复制给nativewindow
+        memcpy(dst + i * destStride, src + i * srcStride, srcStride);
+    }
+    ANativeWindow_unlockAndPost(nativeWindow);
+}
 
 void yuvToARGB(AVFrame *sourceAVFrame, uint8_t *dst_rgba) {
     switch (sourceAVFrame->format) {
