@@ -3,6 +3,21 @@ plugins {
     id 'maven-publish'
 }
 
+def getVersionName = { ->
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'describe', '--tags'
+            standardOutput = stdout
+        }
+        return stdout.toString().trim()
+    }
+    catch (ignored) {
+        println "===================error name!"
+        return "1.0.00"
+    }
+}
+
 android {
     compileSdkVersion 30
     buildToolsVersion "30.0.3"
@@ -28,6 +43,12 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            android.libraryVariants.all { variant ->
+                variant.outputs.all {
+                    def fileName = "BIPPlayer-${getVersionName}.aar"
+                    outputFileName = fileName
+                }
+            }
         }
     }
     compileOptions {
@@ -41,21 +62,6 @@ android {
         }
     }
     resourcePrefix "bip_player_"
-}
-
-def getVersionName = { ->
-    try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'describe', '--tags'
-            standardOutput = stdout
-        }
-        return stdout.toString().trim()
-    }
-    catch (ignored) {
-        println "===================error name!"
-        return "1.0.00"
-    }
 }
 
 afterEvaluate {
