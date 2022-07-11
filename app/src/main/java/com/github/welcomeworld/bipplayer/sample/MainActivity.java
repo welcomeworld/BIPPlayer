@@ -27,18 +27,17 @@ import com.github.welcomeworld.bipplayer.sample.databinding.ActivityMainBinding;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     DefaultBIPPlayer bipPlayer = new DefaultBIPPlayer();
 
     private ActivityMainBinding binding;
 
-    private static boolean checkPermission(Activity activity, String... permissions) {
-        boolean permissionGranted = true;
+    private static void checkPermission(Activity activity, String... permissions) {
         for (String permission : permissions) {
             int permissionCode = ContextCompat.checkSelfPermission(activity, permission);
             if (permissionCode != PackageManager.PERMISSION_GRANTED) {
-                permissionGranted = false;
                 try {
                     ActivityCompat.requestPermissions(
                             activity, new String[]{permission}, 666);
@@ -47,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
-        return permissionGranted;
     }
 
     @Override
@@ -96,30 +94,23 @@ public class MainActivity extends AppCompatActivity {
         binding.videoPrepare.setOnClickListener(v -> {
             File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao.mp4");
             bipPlayer.setDataSource(file.getAbsolutePath());
-//                bipPlayer.setDataSource("http://stream4.iqilu.com/ksd/video/2020/02/17/c5e02420426d58521a8783e754e9f4e6.mp4");
-//                bipPlayer.setDataSource("https://stream7.iqilu.com/10339/upload_transcode/202002/18/20200218114723HDu3hhxqIT.mp4");
             bipPlayer.prepareAsync();
         });
-        binding.videoPublishCamera.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (binding.videoPublishUrl.getText() != null) {
-                    Intent cameraIntent = new Intent(MainActivity.this, CameraActivity.class);
-                    cameraIntent.putExtra("publishUrl", binding.videoPublishUrl.getText().toString());
-                    startActivity(cameraIntent);
-                }
+        binding.videoPublishCamera.setOnClickListener(v -> {
+            if (binding.videoPublishUrl.getText() != null) {
+                Intent cameraIntent = new Intent(MainActivity.this, CameraActivity.class);
+                cameraIntent.putExtra("publishUrl", binding.videoPublishUrl.getText().toString());
+                startActivity(cameraIntent);
             }
         });
-        binding.videoPublishFile.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent("android.intent.action.GET_CONTENT");
-                intent.setType("video/*");
-                startActivityForResult(intent, 234);
-            }
+        binding.videoPublishFile.setOnClickListener(v -> {
+            Intent intent = new Intent("android.intent.action.GET_CONTENT");
+            intent.setType("video/*");
+            startActivityForResult(intent, 234);
         });
-        binding.videoPublishUrl.setText("rtmp://192.168.0.101/live/test_rtmp");
-        binding.videoPlayUrl.setText("rtmp://192.168.0.101/live/test_rtmp");
+        String liveUrl = "rtmp://192.168.0.101/live/test_rtmp";
+        binding.videoPublishUrl.setText(liveUrl);
+        binding.videoPlayUrl.setText(liveUrl);
         binding.videoPlayRtmp.setOnClickListener(v -> {
             if (binding.videoPlayUrl.getText() != null) {
                 bipPlayer.setDataSource(binding.videoPlayUrl.getText().toString());
@@ -157,17 +148,14 @@ public class MainActivity extends AppCompatActivity {
                     long duration = bipPlayer.getDuration();
                     binding.position.setText(formatTime(position));
                     binding.duration.setText(formatTime(duration));
-                    binding.videoHeight.setText("height:" + bipPlayer.getVideoHeight() + "px");
-                    binding.videoWidth.setText("width:" + bipPlayer.getVideoWidth() + "px");
+                    String heightString = "height:" + bipPlayer.getVideoHeight() + "px";
+                    String widthString = "width:" + bipPlayer.getVideoWidth() + "px";
+                    binding.videoHeight.setText(heightString);
+                    binding.videoWidth.setText(widthString);
                     if (duration != 0) {
                         binding.seekBar.setProgress((int) (position * 1000 / duration));
                     }
                 });
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
             }
         }).start();
         binding.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -196,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static String formatTime(long time) {
-        SimpleDateFormat format = new SimpleDateFormat("mm:ss");
+        SimpleDateFormat format = new SimpleDateFormat("mm:ss", Locale.CHINA);
         return format.format(time);
     }
 
