@@ -8,7 +8,6 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -25,7 +24,6 @@ import com.github.welcomeworld.bipplayer.DefaultBIPPlayer;
 import com.github.welcomeworld.bipplayer.DefaultBipPublisher;
 import com.github.welcomeworld.bipplayer.sample.databinding.ActivityMainBinding;
 
-import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
 
@@ -91,11 +89,7 @@ public class MainActivity extends AppCompatActivity {
         bipPlayer.setDisplay(binding.surface.getHolder());
         bipPlayer.setScreenOnWhilePlaying(true);
         bipPlayer.setOnBufferingUpdateListener((bp, var2) -> binding.seekBar.setSecondaryProgress(var2 * 10));
-        binding.videoPrepare.setOnClickListener(v -> {
-            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao.mp4");
-            bipPlayer.setDataSource(file.getAbsolutePath());
-            bipPlayer.prepareAsync();
-        });
+        binding.videoPrepare.setOnClickListener(v -> bipPlayer.prepareAsync());
         binding.videoPublishCamera.setOnClickListener(v -> {
             if (binding.videoPublishUrl.getText() != null) {
                 Intent cameraIntent = new Intent(MainActivity.this, CameraActivity.class);
@@ -118,14 +112,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         binding.videoQuality.setOnClickListener(v -> {
-            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "jiandao_videoonly.mp4");
-            bipPlayer.setDataSource(file.getAbsolutePath());
-            bipPlayer.prepareQualityAsync(file.getAbsolutePath());
         });
         binding.videoNext.setOnClickListener(v -> {
-            File file = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), "tescc.m3u8");
-            bipPlayer.setDataSource(file.getAbsolutePath());
-            bipPlayer.prepareNextAsync(file.getAbsolutePath());
         });
 
         binding.videoStart.setOnClickListener(v -> bipPlayer.start());
