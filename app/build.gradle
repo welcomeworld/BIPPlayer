@@ -1,10 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'bugly'
-}
-bugly {
-    appId = '94d91fbe10' // 注册时分配的App ID
-    appKey = '0aba428f-92ce-42e3-9acf-f1a37aff0f6e' // 注册时分配的App Key
 }
 
 android {
@@ -17,7 +12,6 @@ android {
         targetSdkVersion 30
         versionCode 1
         versionName "1.0"
-        buildConfigField "String", "buglyAppId", "\"94d91fbe10\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
@@ -54,9 +48,6 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
     implementation project(":bipplayer")
-    //bugly
-    implementation 'com.tencent.bugly:crashreport:3.4.4'
-    implementation 'com.tencent.bugly:nativecrashreport:3.9.2'
 
     //Camerax
     def camerax_version = "1.1.0-beta03"
