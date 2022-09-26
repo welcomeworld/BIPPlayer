@@ -37,10 +37,8 @@ void BipPlayer::release() {
     }
     reset();
     playState = STATE_RELEASE;
-    if (nativeWindow != nullptr) {
-        ANativeWindow_release(nativeWindow);
-        nativeWindow = nullptr;
-    }
+    delete bipNativeWindow;
+    bipNativeWindow = nullptr;
     if (rgb_frame != nullptr) {
         av_frame_free(&rgb_frame);
         rgb_frame = nullptr;
@@ -340,12 +338,7 @@ void BipPlayer::showVideoPacket() {
 }
 
 void BipPlayer::setVideoSurface(ANativeWindow *window) {
-    //申请ANativeWindow
-    if (nativeWindow != nullptr && nativeWindow != window) {
-        ANativeWindow_release(nativeWindow);
-        nativeWindow = nullptr;
-    }
-    nativeWindow = window;
+    bipNativeWindow->setWindow(window);
     showRGBFrame();
 }
 
@@ -823,6 +816,7 @@ BipPlayer::BipPlayer() {
     pthread_mutex_init(&msgMutex, nullptr);
     pthread_cond_init(&msgCond, nullptr);
     pthread_create(&msgLoopThreadId, nullptr, bipMsgLoopThread, this);//开启消息线程
+    bipNativeWindow = new BipNativeWindow();
 };
 
 BipPlayer::~BipPlayer() {
@@ -1622,33 +1616,11 @@ void BipPlayer::setPlaySpeed(float speed) {
 }
 
 void BipPlayer::showRGBFrame() {
-    if (nativeWindow == nullptr || rgb_frame == nullptr) {
+    if (rgb_frame == nullptr) {
         return;
     }
-    //配置nativeWindow
-    if (nativeWindow != nullptr) {
-        ANativeWindow_setBuffersGeometry(nativeWindow, rgb_frame->width,
-                                         rgb_frame->height, WINDOW_FORMAT_RGBA_8888);
-    }
-    //上锁
-    if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
-        //锁定窗口失败
-        return;
-    }
-
-    //  rgb_frame是有画面数据
-    auto *dst = static_cast<uint8_t *>(nativeWindowBuffer.bits);
-    //拿到一行有多少个字节 RGBA nativeWindow缓冲区中每一行长度不一定等于视频宽度
-    int destStride = nativeWindowBuffer.stride * 4;
-    //像素数据的首地址
-    uint8_t *src = rgb_frame->data[0];
-    //实际内存一行数量
-    int srcStride = rgb_frame->linesize[0];
-    for (int i = 0; i < rgb_frame->height; i++) {
-        //必须将rgb_frame的数据一行一行复制给nativewindow
-        memcpy(dst + i * destStride, src + i * srcStride, srcStride);
-    }
-    ANativeWindow_unlockAndPost(nativeWindow);
+    bipNativeWindow->disPlay(rgb_frame->data[0], rgb_frame->linesize[0], rgb_frame->width,
+                             rgb_frame->height);
 }
 
 void yuvToARGB(AVFrame *sourceAVFrame, uint8_t *dst_rgba) {

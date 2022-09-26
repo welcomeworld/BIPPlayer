@@ -16,6 +16,7 @@
 #include "bipPlayerOptions.h"
 #include "SoundTouch.h"
 #include "BipLog.h"
+#include "BipNativeWindow.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -289,9 +290,7 @@ public:
     //video
     AVCodecContext *avCodecContext = nullptr;
     SwsContext *swsContext{};
-    ANativeWindow *nativeWindow = nullptr;
-    //视频缓冲区
-    ANativeWindow_Buffer nativeWindowBuffer;
+    BipNativeWindow *bipNativeWindow = nullptr;
     int video_index = -1;
     //视频Packet队列
     std::queue<AVPacket *> videoPacketQueue;
