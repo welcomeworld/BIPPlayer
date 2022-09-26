@@ -26,6 +26,8 @@ import com.github.welcomeworld.bipplayer.sample.databinding.ActivityMainBinding;
 
 import java.text.SimpleDateFormat;
 import java.util.Locale;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
     DefaultBIPPlayer bipPlayer = new DefaultBIPPlayer();
@@ -123,11 +125,11 @@ public class MainActivity extends AppCompatActivity {
         binding.videoRelease.setOnClickListener(v -> bipPlayer.release());
         binding.videoFile.setOnClickListener(v -> {
             Intent intent = new Intent("android.intent.action.GET_CONTENT");
-            intent.setType("video/*");
+            intent.setType("*/*");
             startActivityForResult(intent, 233);
         });
-        new Thread(() -> {
-            while (bipPlayer != null) {
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+            if (bipPlayer != null) {
                 runOnUiThread(() -> {
                     if (bipPlayer == null) {
                         return;
@@ -145,7 +147,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             }
-        }).start();
+        }, 0, 500, TimeUnit.MILLISECONDS);
         binding.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
