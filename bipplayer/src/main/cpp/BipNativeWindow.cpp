@@ -19,6 +19,7 @@ BipNativeWindow::BipNativeWindow() {
 void BipNativeWindow::disPlay(uint8_t *src, int srcWidth, int videoWidth, int videoHeight) {
     lock();
     if (nativeWindow == nullptr) {
+        unlock();
         return;
     }
     //配置nativeWindow
@@ -26,6 +27,7 @@ void BipNativeWindow::disPlay(uint8_t *src, int srcWidth, int videoWidth, int vi
                                      videoHeight, WINDOW_FORMAT_RGBA_8888);
     //上锁
     if (ANativeWindow_lock(nativeWindow, &nativeWindowBuffer, nullptr)) {
+        unlock();
         //锁定窗口失败
         return;
     }
@@ -40,6 +42,7 @@ void BipNativeWindow::disPlay(uint8_t *src, int srcWidth, int videoWidth, int vi
     }
     lock();
     if (nativeWindow == nullptr) {
+        unlock();
         return;
     }
     ANativeWindow_unlockAndPost(nativeWindow);
