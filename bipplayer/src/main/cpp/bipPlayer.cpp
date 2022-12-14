@@ -453,7 +453,7 @@ int avFormatInterrupt(void *ctx) {
     gettimeofday(&currentTime, nullptr);
     long diffTime = calculateTime(interruptContext->readStartTime, currentTime);
     if (interruptContext->readStartTime.tv_sec != 0) {
-        if (diffTime > 4000) {
+        if (diffTime > 30000) {
             return 1;
         }
     }
