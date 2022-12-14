@@ -343,6 +343,9 @@ void BipPlayer::setVideoSurface(ANativeWindow *window) {
 }
 
 void BipPlayer::postEventFromNative(int what, int arg1, int arg2, void *object) const {
+    if (playState == STATE_RELEASE) {
+        return;
+    }
     JNIEnv *env = nullptr;
     jint result = staticVm->GetEnv((void **) &env, JNI_VERSION_1_6);
     if (result != JNI_OK) {
