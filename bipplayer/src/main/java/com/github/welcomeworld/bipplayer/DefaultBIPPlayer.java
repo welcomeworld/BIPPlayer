@@ -15,8 +15,6 @@ import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
-import androidx.annotation.NonNull;
-
 import java.io.FileDescriptor;
 import java.lang.ref.WeakReference;
 import java.util.Map;
@@ -178,7 +176,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         mOnPreparedListener = listener;
     }
 
-    protected final void notifyOnPrepared() {
+    private void notifyOnPrepared() {
         if (mOnPreparedListener != null)
             mOnPreparedListener.onPrepared(this);
     }
@@ -192,12 +190,12 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         mOnInfoListener = listener;
     }
 
-    protected final void notifyOnError(int what, int extra) {
+    private void notifyOnError(int what, int extra) {
         if (mOnErrorListener != null)
             mOnErrorListener.onError(this, what, extra);
     }
 
-    protected final void notifyOnInfo(int what, int extra) {
+    private void notifyOnInfo(int what, int extra) {
         if (mOnInfoListener != null)
             mOnInfoListener.onInfo(this, what, extra);
     }
@@ -217,7 +215,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         mOnSeekCompleteListener = listener;
     }
 
-    protected final void notifyOnSeekComplete() {
+    private void notifyOnSeekComplete() {
         if (mOnSeekCompleteListener != null)
             mOnSeekCompleteListener.onSeekComplete(this);
     }
@@ -227,7 +225,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         mOnBufferingUpdateListener = listener;
     }
 
-    protected final void notifyOnBufferingUpdate(int percent) {
+    private void notifyOnBufferingUpdate(int percent) {
         if (mOnBufferingUpdateListener != null)
             mOnBufferingUpdateListener.onBufferingUpdate(this, percent);
     }
@@ -249,7 +247,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         }
 
         @Override
-        public void handleMessage(@NonNull Message msg) {
+        public void handleMessage(Message msg) {
             DefaultBIPPlayer bip = mWeakPlayer.get();
             if (bip == null) {
                 return;
