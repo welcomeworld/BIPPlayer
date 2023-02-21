@@ -20,3 +20,4 @@ allprojects {
 ~~-支持多种方式设置DataSource(复刻MediaPlayer)~~  
 ~~-使用MediaCodeC硬解码~~
 ~~-支持变速播放~~
+-优化播放器消息逻辑（卡死或者退出界面后继续播放）
