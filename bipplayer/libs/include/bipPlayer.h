@@ -17,6 +17,7 @@
 #include "SoundTouch.h"
 #include "BipLog.h"
 #include "BipNativeWindow.h"
+#include "BipMessage.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,17 +112,6 @@ public:
     void reset();
 };
 
-class BIPMessage {
-public:
-    int arg1 = 0;
-    int arg2 = 0;
-    void *obj = nullptr;
-
-    void (*free_l)(void *obj) = nullptr;
-
-    int what = 0;
-};
-
 class BipPlayer {
 private:
 
@@ -159,10 +149,7 @@ private:
     std::map<const char *, const char *, ptrCmp> formatOps;
     std::map<const char *, const char *, ptrCmp> codecOps;
     std::map<const char *, const char *, ptrCmp> swsOps;
-    std::queue<BIPMessage *> msgQueue;
-    pthread_mutex_t msgMutex{};
-    pthread_cond_t msgCond{};
-
+    MessageQueue *messageQueue = nullptr;
     InterruptContext *interruptContext;
     InterruptContext *nextInterruptContext;
 
@@ -196,9 +183,9 @@ private:
 
     void waitAllThreadStop();
 
-    bool videoAvailable();
+    bool videoAvailable() const;
 
-    bool audioAvailable();
+    bool audioAvailable() const;
 
     void checkPrepared();
 
@@ -256,7 +243,7 @@ public:
 
     void msgLoop();
 
-    void notifyMsg(BIPMessage *bipMessage);
+    void notifyMsg(BipMessage *bipMessage);
 
     void notifyMsg(int what);
 

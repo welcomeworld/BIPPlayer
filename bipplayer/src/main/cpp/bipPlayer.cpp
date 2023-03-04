@@ -49,7 +49,6 @@ void BipPlayer::release() {
     pthread_cond_destroy(&videoFrameCond);
     pthread_cond_destroy(&audioFrameEmptyCond);
     pthread_cond_destroy(&videoFrameEmptyCond);
-    pthread_cond_destroy(&msgCond);
     pthread_mutex_destroy(&videoMutex);
     pthread_mutex_destroy(&videoCacheMutex);
     pthread_mutex_destroy(&audioMutex);
@@ -57,10 +56,10 @@ void BipPlayer::release() {
     pthread_mutex_destroy(&audioFrameMutex);
     pthread_mutex_destroy(&videoFrameMutex);
     pthread_mutex_destroy(&avOpsMutex);
-    pthread_mutex_destroy(&msgMutex);
     delete interruptContext;
     delete nextInterruptContext;
     delete soundtouch;
+    delete messageQueue;
     destroyOpenSL();
 }
 
@@ -747,16 +746,6 @@ void BipPlayer::lockAll() {
  * must call with lockAll() before
  */
 void BipPlayer::unLockAll() {
-    /** seek only signal two cond test
-    pthread_mutex_unlock(&avOpsMutex);
-    pthread_cond_signal(&videoFrameEmptyCond);
-    pthread_cond_signal(&audioFrameEmptyCond);
-    pthread_mutex_unlock(&audioMutex);
-    pthread_mutex_unlock(&videoMutex);
-    pthread_mutex_unlock(&audioFrameMutex);
-    pthread_mutex_unlock(&videoFrameMutex);
-     **/
-
     pthread_mutex_unlock(&avOpsMutex);
     pthread_cond_signal(&audioCond);
     pthread_mutex_unlock(&audioMutex);
@@ -816,15 +805,14 @@ BipPlayer::BipPlayer() {
     pthread_mutex_init(&avOpsMutex, nullptr);
     pthread_cond_init(&audioFrameEmptyCond, nullptr);
     pthread_cond_init(&videoFrameEmptyCond, nullptr);
-    pthread_mutex_init(&msgMutex, nullptr);
-    pthread_cond_init(&msgCond, nullptr);
     pthread_create(&msgLoopThreadId, nullptr, bipMsgLoopThread, this);//开启消息线程
     bipNativeWindow = new BipNativeWindow();
-};
+    messageQueue = new MessageQueue();
+}
 
 BipPlayer::~BipPlayer() {
     release();
-};
+}
 
 long BipPlayer::getDuration() const {
     return duration;
@@ -1452,94 +1440,73 @@ void BipPlayer::prepareNext() {
 
 void BipPlayer::msgLoop() {
     while (playState != STATE_RELEASE) {
-        pthread_mutex_lock(&msgMutex);
-        if (!msgQueue.empty()) {
-            BIPMessage *processMsg = msgQueue.front();
-            msgQueue.pop();
-            pthread_mutex_unlock(&msgMutex);
-            LOGE("process msg %x with arg1:%d arg2:%d", processMsg->what, processMsg->arg1,
-                 processMsg->arg2);
-            switch (processMsg->what) {
-                case MSG_SEEK:
-                    seekTo(processMsg->arg1);
-                    break;
-                case MSG_STOP:
-                    stop();
-                    break;
-                case MSG_START:
-                    start();
-                    break;
-                case MSG_PAUSE:
-                    pause();
-                    break;
-                case MSG_RESET:
-                    reset();
-                    break;
-                case MSG_RELEASE:
-                    release();
-                    break;
-                case MSG_PREPARE_NEXT:
-                    if (processMsg->arg1) {
-                        dashInputPath = static_cast<char *>(processMsg->obj);
-                    } else {
-                        nextInputPath = static_cast<char *>(processMsg->obj);
-                    }
-                    nextIsDash = processMsg->arg1;
-                    pthread_create(&(prepareNextThreadId), nullptr, prepareNextVideoThread,
-                                   this);//开启begin线程
-                    break;
-                case MSG_PREPARE:
-                    pthread_create(&(prepareThreadId), nullptr, prepareVideoThread,
-                                   this);//开启begin线程
-                    break;
-                case MSG_SET_DATA_SOURCE:
-                    inputPath = static_cast<char *>(processMsg->obj);
-                    break;
-            }
-            LOGE("process msg %x completed", processMsg->what);
-            //消息处理完毕 obj的释放自己处理
-            delete processMsg;
-        } else {
-            pthread_cond_wait(&msgCond, &msgMutex);
-            pthread_mutex_unlock(&msgMutex);
-            continue;
+        BipMessage *processMsg = messageQueue->next();
+        LOGE("process msg %x with arg1:%d arg2:%d", processMsg->what, processMsg->arg1,
+             processMsg->arg2);
+        switch (processMsg->what) {
+            case MSG_SEEK:
+                seekTo(processMsg->arg1);
+                break;
+            case MSG_STOP:
+                stop();
+                break;
+            case MSG_START:
+                start();
+                break;
+            case MSG_PAUSE:
+                pause();
+                break;
+            case MSG_RESET:
+                reset();
+                break;
+            case MSG_RELEASE:
+                release();
+                break;
+            case MSG_PREPARE_NEXT:
+                if (processMsg->arg1) {
+                    dashInputPath = static_cast<char *>(processMsg->obj);
+                } else {
+                    nextInputPath = static_cast<char *>(processMsg->obj);
+                }
+                nextIsDash = processMsg->arg1;
+                pthread_create(&(prepareNextThreadId), nullptr, prepareNextVideoThread,
+                               this);//开启begin线程
+                break;
+            case MSG_PREPARE:
+                pthread_create(&(prepareThreadId), nullptr, prepareVideoThread,
+                               this);//开启begin线程
+                break;
+            case MSG_SET_DATA_SOURCE:
+                inputPath = static_cast<char *>(processMsg->obj);
+                break;
         }
-    }
-    while (!msgQueue.empty()) {
-        BIPMessage *processMsg = msgQueue.front();
-        msgQueue.pop();
-        if (processMsg->free_l != nullptr) {
-            processMsg->free_l(processMsg->obj);
-            processMsg->free_l = nullptr;
-        }
+        LOGE("process msg %x completed", processMsg->what);
+        //消息处理完毕 obj的释放自己处理
         delete processMsg;
     }
 }
 
-void BipPlayer::notifyMsg(BIPMessage *message) {
+void BipPlayer::notifyMsg(BipMessage *message) {
     if (playState == STATE_RELEASE) {
         return;
     }
-    pthread_mutex_lock(&msgMutex);
-    msgQueue.push(message);
-    pthread_cond_signal(&msgCond);
-    pthread_mutex_unlock(&msgMutex);
+    messageQueue->scheduleMsg(message);
 }
 
 void BipPlayer::notifyMsg(int what) {
     if (playState == STATE_RELEASE) {
         return;
     }
-    auto *message = new BIPMessage();
+    auto *message = new BipMessage();
     message->what = what;
     notifyMsg(message);
 }
 
-bool BipPlayer::audioAvailable() {
+bool BipPlayer::audioAvailable() const {
     return audio_index != -1;
 }
 
-bool BipPlayer::videoAvailable() {
+bool BipPlayer::videoAvailable() const {
     return video_index != -1;
 }
 

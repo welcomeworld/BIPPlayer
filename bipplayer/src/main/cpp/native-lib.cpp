@@ -65,7 +65,7 @@ jboolean isPlaying(JNIEnv *env, jobject instance) {
 
 void native_seekTo(JNIEnv *env, jobject instance, jlong time) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    auto *message = new BIPMessage();
+    auto *message = new BipMessage();
     message->what = MSG_SEEK;
     message->arg1 = time;
     bipPlayer->notifyMsg(message);
@@ -108,7 +108,7 @@ void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboo
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
     char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
     strcpy(cinputPath, inputPath);
-    auto *message = new BIPMessage();
+    auto *message = new BipMessage();
     message->what = MSG_PREPARE_NEXT;
     message->arg1 = dash;
     message->obj = cinputPath;
@@ -130,7 +130,7 @@ void native_setDataSource(JNIEnv *env, jobject instance, jstring inputPath_) {
     const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
     char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
     strcpy(cinputPath, inputPath);
-    auto *message = new BIPMessage();
+    auto *message = new BipMessage();
     message->what = MSG_SET_DATA_SOURCE;
     message->obj = cinputPath;
     message->free_l = message_delete_str_callback;
@@ -223,7 +223,7 @@ void native_setDataSourceFd(JNIEnv *env, jobject instance, jint fd) {
     char *cinputPath = static_cast<char *>(calloc(1, 28));
     int dupFd = dup(fd);
     snprintf(cinputPath, sizeof(cinputPath), "fd:%d", dupFd);
-    auto *message = new BIPMessage();
+    auto *message = new BipMessage();
     message->what = MSG_SET_DATA_SOURCE;
     message->obj = cinputPath;
     message->free_l = message_delete_str_callback;
