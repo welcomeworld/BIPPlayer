@@ -142,6 +142,10 @@ private:
 
     static bool javaExceptionCheckCatchAll(JNIEnv *env);
 
+    static void *preparePlayerThread(void *args);
+
+    static void *bufferingThread(void *args);
+
     void notifyError(int errorCode, int errorExtra = 0);
 
     void postEventFromNative(int what, int arg1, int arg2, void *object) const;
@@ -161,6 +165,21 @@ private:
     bool audioAvailable() const;
 
     bool checkCachePrepared();
+
+    void setVideoTracker(BipVideoTracker *videoTracker);
+
+    void setAudioTracker(BipAudioTracker *audioTracker);
+
+    BipAudioTracker *createAudioTracker(double trackTimeBase, AVCodecParameters *codecpar);
+
+    BipVideoTracker *
+    createVideoTracker(double trackTimeBase, AVCodecParameters *codecPar, double fps);
+
+    void stopAndClearDataSources();
+
+    void msgLoop();
+
+    void checkBuffering();
 
 public:
     static jclass defaultBIPPlayerClass;
@@ -202,10 +221,6 @@ public:
 
     long getDuration();
 
-    static void *bufferingThread(void *args);
-
-    void checkBuffering();
-
     void prepare(BipDataSource *prepareSource);
 
     void setVideoSurface(ANativeWindow *nativeWindow) const;
@@ -213,8 +228,6 @@ public:
     void release();
 
     void setOption(int category, const char *key, const char *value);
-
-    void msgLoop();
 
     void notifyMsg(BipMessage *bipMessage);
 
@@ -229,8 +242,6 @@ public:
     int getFps() const;
 
     void setPlaySpeed(float speed);
-
-    static void *preparePlayerThread(void *args);
 
     static void playerSetJavaWeak(BipPlayer *bipPlayer, void *weak_this);
 
@@ -248,18 +259,7 @@ public:
 
     void postPrepare();
 
-    void stopAndClearDataSources();
-
     void postPrepareNext(char *inputSource, bool isSync);
-
-    void setVideoTracker(BipVideoTracker *videoTracker);
-
-    void setAudioTracker(BipAudioTracker *audioTracker);
-
-    BipAudioTracker *createAudioTracker(double trackTimeBase, AVCodecParameters *codecpar);
-
-    BipVideoTracker *
-    createVideoTracker(double trackTimeBase, AVCodecParameters *codecPar, double fps);
 
     bool isRelease() const;
 };
