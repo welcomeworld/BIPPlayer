@@ -2,8 +2,8 @@
 // Created by welcomeworld on 2/27/23.
 //
 
-#ifndef BANGUMIINSTRUMENTALITYPROJECT_BIPMESSAGE_H
-#define BANGUMIINSTRUMENTALITYPROJECT_BIPMESSAGE_H
+#ifndef BIPPLAYER_BIPMESSAGE_H
+#define BIPPLAYER_BIPMESSAGE_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,4 +42,4 @@ private:
     pthread_mutex_t msgMutex{};
 };
 
-#endif //BANGUMIINSTRUMENTALITYPROJECT_BIPMESSAGE_H
+#endif //BIPPLAYER_BIPMESSAGE_H

@@ -28,7 +28,6 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     private static final int MEDIA_ERROR = 5;
     private static final int MEDIA_PLAY_STATE_CHANGE = 6;
     private static final int MEDIA_INFO = 7;
-    private static final int MEDIA_PLAYER_MESSAGE = 8;
 
     public static final int OPT_CATEGORY_FORMAT = 1;
     public static final int OPT_CATEGORY_CODEC = 2;
@@ -274,8 +273,6 @@ public final class DefaultBIPPlayer implements BIPPlayer {
                     break;
                 case MEDIA_INFO:
                     bip.notifyOnInfo(msg.arg1, msg.arg2);
-                    break;
-                case MEDIA_PLAYER_MESSAGE:
                     break;
                 default:
 

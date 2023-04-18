@@ -8,7 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <libavformat/avio.h>
+#include "libavformat/avio.h"
 #include "libavcodec/avcodec.h"
 #ifdef __cplusplus
 }
