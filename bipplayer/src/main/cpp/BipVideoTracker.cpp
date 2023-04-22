@@ -10,6 +10,9 @@ void BipVideoTracker::clearCache() {
 }
 
 void BipVideoTracker::showVideoPacket() {
+    if (clockMaintain && trackerCallback != nullptr) {
+        trackerCallback->reportPlayStateChange(true);
+    }
     double delay         //一帧占用的时间
     , diff   //音频帧与视频帧相差时间
     , sync_threshold; //音视频差距界限
@@ -32,7 +35,7 @@ void BipVideoTracker::showVideoPacket() {
                     trackerCallback->requestBuffering();
                 }
             }
-            return;
+            break;
         }
         double realHopeFps = fps * playSpeed;
         delay = 1.0 / realHopeFps;
@@ -65,7 +68,6 @@ void BipVideoTracker::showVideoPacket() {
                 }
             }
         }
-
         //转换成RGBA格式
         if (matchYuv(frame->format)) {
             yuvToARGB(frame, rgb_frame->data[0]);
@@ -97,6 +99,9 @@ void BipVideoTracker::showVideoPacket() {
         }
         showFrameStartTime = av_gettime();
         av_frame_free(&frame);
+    }
+    if (clockMaintain && trackerCallback != nullptr) {
+        trackerCallback->reportPlayStateChange(false);
     }
 }
 

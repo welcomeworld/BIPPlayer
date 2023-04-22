@@ -121,6 +121,9 @@ int BipAudioTracker::getPcm() {
         av_frame_free(&audioFrame);
         return size;
     }
+    if (clockMaintain && trackerCallback != nullptr) {
+        trackerCallback->reportPlayStateChange(false);
+    }
     return 0;
 }
 
@@ -194,6 +197,9 @@ void BipAudioTracker::destroyOpenSL() {
 
 void BipAudioTracker::playAudio() {
     (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_PLAYING);
+    if (clockMaintain && trackerCallback != nullptr) {
+        trackerCallback->reportPlayStateChange(true);
+    }
     innerBufferQueueCallback();
 }
 

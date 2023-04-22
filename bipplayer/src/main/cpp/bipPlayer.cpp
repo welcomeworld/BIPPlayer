@@ -743,6 +743,10 @@ void BipPlayer::stopAndClearDataSources() {
     activeDataSources.clear();
 }
 
+void BipPlayer::reportPlayStateChange(bool isPlaying) {
+    postEventFromNative(MEDIA_PLAY_STATE_CHANGE, isPlaying ? 1 : 0, 0, nullptr);
+}
+
 
 BipPlayer::BipPrepareContext::BipPrepareContext(BipPlayer *pPlayer, BipDataSource *pSource) {
     this->player = pPlayer;

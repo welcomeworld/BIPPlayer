@@ -199,6 +199,8 @@ public:
 
     void requestBuffering();
 
+    void reportPlayStateChange(bool isPlaying);
+
     void play();
 
     void pause();

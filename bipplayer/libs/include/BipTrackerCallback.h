@@ -12,6 +12,8 @@ public:
     virtual void reportFps(int fps) = 0;
 
     virtual void requestBuffering() = 0;
+
+    virtual void reportPlayStateChange(bool isPlaying) = 0;
 };
 
 #endif //BIPPLAYER_BIPTRACKERCALLBACK_H
