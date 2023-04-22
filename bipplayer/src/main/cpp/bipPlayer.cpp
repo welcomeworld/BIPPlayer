@@ -108,12 +108,14 @@ void BipPlayer::stop() {
     if (!isStarted()) {
         return;
     }
+    if (isPlaying()) {
+        pause();
+    }
     isRequestOptions = true;
     pthread_mutex_lock(&avOpsMutex);
     isRequestOptions = false;
     stopAndClearDataSources();
     playerState = STATE_STOP;
-    notifyPlayStateChange(false);
     if (audioAvailable()) {
         bipAudioTracker->stop();
     }
@@ -453,7 +455,6 @@ void BipPlayer::seekTo(long time) {
 
 void BipPlayer::pause() {
     playerState = STATE_PAUSE;
-    notifyPlayStateChange(false);
     if (audioAvailable()) {
         bipAudioTracker->pause();
     }
@@ -483,7 +484,6 @@ void BipPlayer::playerSetJavaWeak(BipPlayer *bipPlayer, void *weak_this) {
 
 void BipPlayer::play() {
     playerState = STATE_PLAYING;
-    notifyPlayStateChange(true);
     if (audioAvailable()) {
         bipAudioTracker->play();
     }
@@ -669,10 +669,6 @@ void BipPlayer::checkBuffering() {
 
 void BipPlayer::notifyError(int errorCode, int errorExtra) {
     postEventFromNative(MEDIA_ERROR, errorCode, errorExtra, nullptr);
-}
-
-void BipPlayer::notifyPlayStateChange(bool isPlaying) {
-    postEventFromNative(MEDIA_PLAY_STATE_CHANGE, isPlaying ? 1 : 0, 0, nullptr);
 }
 
 void BipPlayer::setVideoTracker(BipVideoTracker *videoTracker) {

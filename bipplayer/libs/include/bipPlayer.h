@@ -158,8 +158,6 @@ private:
 
     void notifyInfo(int info);
 
-    void notifyPlayStateChange(bool isPlaying);
-
     bool videoAvailable() const;
 
     bool audioAvailable() const;
