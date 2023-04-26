@@ -51,12 +51,13 @@ public:
     bool isSync = false;
     bool videoEnable = true;
     bool audioEnable = true;
-    int sourceState = STATE_CREATED;
+    std::atomic<int> sourceState = {STATE_CREATED};
     long seekPosition = 0;
 };
 
 class BipPlayer : public BipTrackerCallback {
 private:
+    static const int MAX_ERROR_RETRY = 3;
     //播放器消息码
     static const int MSG_SEEK = 0x233;
     static const int MSG_STOP = 0x234;
@@ -129,6 +130,7 @@ private:
     long duration = -1;//单位毫秒
     pthread_t msgLoopThreadId = 0;
     pthread_t bufferingThreadId = 0;
+    int bufferPercent = 0;
     bool isRequestOptions = false;
     pthread_mutex_t avOpsMutex{};
     std::deque<BipDataSource *> activeDataSources{};
@@ -178,6 +180,8 @@ private:
     void msgLoop();
 
     void checkBuffering();
+
+    void updateBufferPercent();
 
 public:
     static jclass defaultBIPPlayerClass;

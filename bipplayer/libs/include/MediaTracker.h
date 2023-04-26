@@ -53,6 +53,8 @@ public:
 
     long duration = -1;//单位毫秒
 
+    int bufferPercent = 0;
+
     BipTrackerCallback *trackerCallback = nullptr;
 
     bool isStart();

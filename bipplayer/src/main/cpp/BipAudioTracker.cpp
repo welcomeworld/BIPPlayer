@@ -133,7 +133,11 @@ BipAudioTracker::BipAudioTracker(AVCodecParameters *codecPar) {
     audioCodecContext = avcodec_alloc_context3(audioCodec);
     avcodec_parameters_to_context(audioCodecContext,
                                   codecPar);
-    avcodec_open2(audioCodecContext, audioCodec, nullptr);
+    int prepareResult = avcodec_open2(audioCodecContext, audioCodec, nullptr);
+    if (prepareResult != 0) {
+        trackerState = STATE_ERROR;
+        return;
+    }
     //打开音频转换器
     audioSwrContext = swr_alloc();
     swr_alloc_set_opts(audioSwrContext,
