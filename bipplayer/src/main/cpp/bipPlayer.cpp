@@ -191,7 +191,7 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         protocolHook(inputPath, &formatDic);
         if (!strncmp(inputPath, "fd:", 3)) {
             fdAvioContext = new FdAVIOContext();
-            fdAvioContext->openFromDescriptor(static_cast<int>(strtol(inputPath, nullptr, 10)),
+            fdAvioContext->openFromDescriptor(static_cast<int>(strtol(inputPath + 3, nullptr, 10)),
                                               "rb");
             avFormatContext->pb = fdAvioContext->getAvioContext();
         }
