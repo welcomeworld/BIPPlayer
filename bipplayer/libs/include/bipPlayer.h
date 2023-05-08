@@ -53,6 +53,7 @@ public:
     bool audioEnable = true;
     std::atomic<int> sourceState = {STATE_CREATED};
     long seekPosition = 0;
+    long startOffset = 0;
 };
 
 class BipPlayer : public BipTrackerCallback {
@@ -134,7 +135,6 @@ private:
     bool isRequestOptions = false;
     pthread_mutex_t avOpsMutex{};
     std::deque<BipDataSource *> activeDataSources{};
-    BipDataSource *tempDataSource{};
 
     static int ffmpegInterruptCallback(void *ctx);
 
@@ -235,8 +235,6 @@ public:
 
     void notifyMsg(BipMessage *bipMessage);
 
-    void setDataSource(char *inputSource);
-
     void notifyMsg(int what);
 
     BipPlayer();
@@ -261,9 +259,7 @@ public:
 
     void postRelease();
 
-    void postPrepare();
-
-    void postPrepareNext(char *inputSource, bool isSync);
+    void postPrepare(std::deque<BipDataSource *> *bipDataSources);
 
     bool isRelease() const;
 };

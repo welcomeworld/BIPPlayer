@@ -24,9 +24,13 @@ void FdAVIOContext::close() {
     }
 }
 
-bool FdAVIOContext::openFromDescriptor(int theFD, const char *theMode) {
+bool FdAVIOContext::openFromDescriptor(int theFD, const char *theMode, long startOffset) {
     close();
-    myFile = ::fdopen(theFD, theMode);
+    int dupFd = dup(theFD);
+    myFile = ::fdopen(dupFd, theMode);
+    if (myFile != nullptr) {
+        fseek(myFile, startOffset, SEEK_SET);
+    }
     return myFile != nullptr;
 }
 

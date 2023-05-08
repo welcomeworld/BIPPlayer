@@ -4,9 +4,36 @@ BipPlayer *getNativePlayer(JNIEnv *env, jobject instance) {
     return (BipPlayer *) (intptr_t) env->GetLongField(instance, BipPlayer::nativePlayerRefId);
 }
 
-void native_prepareAsync(JNIEnv *env, jobject instance) {
+void native_prepareAsync(JNIEnv *env, jobject instance, jobjectArray dataSources) {
     auto *bipPlayer = getNativePlayer(env, instance);
-    bipPlayer->postPrepare();
+    auto arraySize = env->GetArrayLength(dataSources);
+    if (arraySize == 0) {
+        return;
+    }
+    auto *prepareDataSources = new std::deque<BipDataSource *>();
+    for (int i = 0; i < arraySize; i++) {
+        jobject dataSource = env->GetObjectArrayElement(dataSources, i);
+        jclass DataSourceClass = env->GetObjectClass(dataSource);
+        jfieldID sourceId = env->GetFieldID(DataSourceClass, "source", "Ljava/lang/String;");
+        jfieldID isSingleSourceId = env->GetFieldID(DataSourceClass, "isSingleSource", "Z");
+        jfieldID isSyncId = env->GetFieldID(DataSourceClass, "isSync", "Z");
+        jfieldID videoEnableId = env->GetFieldID(DataSourceClass, "videoEnable", "Z");
+        jfieldID audioEnableId = env->GetFieldID(DataSourceClass, "audioEnable", "Z");
+        jfieldID seekPositionId = env->GetFieldID(DataSourceClass, "seekPosition", "J");
+        jfieldID startOffsetId = env->GetFieldID(DataSourceClass, "startOffset", "J");
+        auto prepareSource = new BipDataSource();
+        auto sourceJava = static_cast<jstring>(env->GetObjectField(dataSource, sourceId));
+        const char *cSource = env->GetStringUTFChars(sourceJava, nullptr);
+        prepareSource->source = cSource;
+        env->ReleaseStringUTFChars(sourceJava, cSource);
+        prepareSource->isSingleSource = env->GetBooleanField(dataSource, isSingleSourceId);
+        prepareSource->isSync = env->GetBooleanField(dataSource, isSyncId);
+        prepareSource->videoEnable = env->GetBooleanField(dataSource, videoEnableId);
+        prepareSource->audioEnable = env->GetBooleanField(dataSource, audioEnableId);
+        prepareSource->seekPosition = env->GetLongField(dataSource, seekPositionId);
+        prepareDataSources->push_back(prepareSource);
+    }
+    bipPlayer->postPrepare(prepareDataSources);
 }
 
 void setVideoSurface(JNIEnv *env, jobject instance, jobject surface) {
@@ -101,27 +128,9 @@ void native_finalize(JNIEnv *env, jobject instance) {
     delete bipPlayer;
 }
 
-void native_prepare_next(JNIEnv *env, jobject instance, jstring inputPath_, jboolean dash) {
-    auto *bipPlayer = getNativePlayer(env, instance);
-    const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
-    strcpy(cinputPath, inputPath);
-    bipPlayer->postPrepareNext(cinputPath, dash);
-    env->ReleaseStringUTFChars(inputPath_, inputPath);
-}
-
 jint native_getFps(JNIEnv *env, jobject instance) {
     auto *bipPlayer = getNativePlayer(env, instance);
     return bipPlayer->getFps();
-}
-
-void native_setDataSource(JNIEnv *env, jobject instance, jstring inputPath_) {
-    auto *bipPlayer = getNativePlayer(env, instance);
-    const char *inputPath = env->GetStringUTFChars(inputPath_, nullptr);
-    char *cinputPath = static_cast<char *>(malloc(strlen(inputPath) + 1));
-    strcpy(cinputPath, inputPath);
-    bipPlayer->setDataSource(cinputPath);
-    env->ReleaseStringUTFChars(inputPath_, inputPath);
 }
 
 BipPublisher *getNativePublisher(JNIEnv *env, jobject instance) {
@@ -197,14 +206,6 @@ void native_setPublishVideoInfo(JNIEnv *env, jobject instance, jint width, jint 
     bipPublisher->height = height;
 }
 
-void native_setDataSourceFd(JNIEnv *env, jobject instance, jint fd) {
-    auto *bipPlayer = getNativePlayer(env, instance);
-    char *cinputPath = static_cast<char *>(calloc(1, 28));
-    int dupFd = dup(fd);
-    snprintf(cinputPath, sizeof(cinputPath), "fd:%d", dupFd);
-    bipPlayer->setDataSource(cinputPath);
-}
-
 void native_setSpeed(JNIEnv *env, jobject instance, jfloat speed) {
     auto *bipPlayer = getNativePlayer(env, instance);
     bipPlayer->setPlaySpeed(speed);
@@ -219,28 +220,25 @@ jfloat native_getSpeed(JNIEnv *env, jobject instance) {
 }
 
 static JNINativeMethod methods[] = {
-        {"_prepareAsync",      "()V",                                      (void *) native_prepareAsync},
-        {"_setVideoSurface",   "(Landroid/view/Surface;)V",                (void *) setVideoSurface},
-        {"native_setup",       "(Ljava/lang/Object;)V",                    (void *) native_setup},
-        {"getDuration",        "()J",                                      (void *) getDuration},
-        {"getCurrentPosition", "()J",                                      (void *) getCurrentPosition},
-        {"getVideoHeight",     "()I",                                      (void *) getVideoHeight},
-        {"getVideoWidth",      "()I",                                      (void *) getVideoWidth},
-        {"isPlaying",          "()Z",                                      (void *) isPlaying},
-        {"seekTo",             "(J)V",                                     (void *) native_seekTo},
-        {"pause",              "()V",                                      (void *) native_pause},
-        {"start",              "()V",                                      (void *) native_start},
-        {"stop",               "()V",                                      (void *) native_stop},
-        {"_reset",             "()V",                                      (void *) native_reset},
-        {"_release",           "()V",                                      (void *) native_release},
-        {"native_finalize",    "()V",                                      (void *) native_finalize},
-        {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V", (void *) native_setOption},
-        {"_prepare_next",      "(Ljava/lang/String;Z)V",                   (void *) native_prepare_next},
-        {"getFps",             "()I",                                      (void *) native_getFps},
-        {"_setDataSource",     "(Ljava/lang/String;)V",                    (void *) native_setDataSource},
-        {"_setDataSourceFd",   "(I)V",                                     (void *) native_setDataSourceFd},
-        {"getSpeed",           "()F",                                      (void *) native_getSpeed},
-        {"setSpeed",           "(F)V",                                     (void *) native_setSpeed}
+        {"_prepareAsync",      "([Lcom/github/welcomeworld/bipplayer/BipDataSource;)V", (void *) native_prepareAsync},
+        {"_setVideoSurface",   "(Landroid/view/Surface;)V",                             (void *) setVideoSurface},
+        {"native_setup",       "(Ljava/lang/Object;)V",                                 (void *) native_setup},
+        {"getDuration",        "()J",                                                   (void *) getDuration},
+        {"getCurrentPosition", "()J",                                                   (void *) getCurrentPosition},
+        {"getVideoHeight",     "()I",                                                   (void *) getVideoHeight},
+        {"getVideoWidth",      "()I",                                                   (void *) getVideoWidth},
+        {"isPlaying",          "()Z",                                                   (void *) isPlaying},
+        {"seekTo",             "(J)V",                                                  (void *) native_seekTo},
+        {"pause",              "()V",                                                   (void *) native_pause},
+        {"start",              "()V",                                                   (void *) native_start},
+        {"stop",               "()V",                                                   (void *) native_stop},
+        {"_reset",             "()V",                                                   (void *) native_reset},
+        {"_release",           "()V",                                                   (void *) native_release},
+        {"native_finalize",    "()V",                                                   (void *) native_finalize},
+        {"setOption",          "(ILjava/lang/String;Ljava/lang/String;)V",              (void *) native_setOption},
+        {"getFps",             "()I",                                                   (void *) native_getFps},
+        {"getSpeed",           "()F",                                                   (void *) native_getSpeed},
+        {"setSpeed",           "(F)V",                                                  (void *) native_setSpeed}
 };
 
 static JNINativeMethod publishMethods[] = {

@@ -6,6 +6,7 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 
 import java.io.FileDescriptor;
+import java.util.List;
 import java.util.Map;
 
 public interface BIPPlayer {
@@ -40,7 +41,7 @@ public interface BIPPlayer {
     }
 
     interface OnErrorListener {
-        boolean onError(BIPPlayer bp, int what, int extra);
+        void onError(BIPPlayer bp, int what, int extra);
     }
 
     interface OnCompletionListener {
@@ -96,4 +97,8 @@ public interface BIPPlayer {
     float getSpeed();
 
     void setSpeed(float speed);
+
+    void setDataSource(List<BipDataSource> bipDataSources);
+
+    void prepareQualityAsync(List<BipDataSource> bipDataSources);
 }

@@ -17,6 +17,8 @@ import android.view.SurfaceHolder;
 
 import java.io.FileDescriptor;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public final class DefaultBIPPlayer implements BIPPlayer {
@@ -51,6 +53,8 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     private long nativePlayerRef;
     private boolean isPlaying;
 
+    private final List<BipDataSource> bipDataSources = new ArrayList<>();
+
     static {
         System.loadLibrary("native-lib");
     }
@@ -69,7 +73,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void prepareAsync() {
-        _prepareAsync();
+        _prepareAsync(bipDataSources.toArray(new BipDataSource[0]));
     }
 
     @Override
@@ -81,7 +85,11 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void setDataSource(String path) {
-        _setDataSource(path);
+        List<BipDataSource> bipDataSources = new ArrayList<>();
+        BipDataSource bipDataSource = new BipDataSource();
+        bipDataSource.source = path;
+        bipDataSources.add(bipDataSource);
+        setDataSource(bipDataSources);
     }
 
     @Override
@@ -91,8 +99,6 @@ public final class DefaultBIPPlayer implements BIPPlayer {
     }
 
     private native void _release();
-
-    private native void _prepare_next(String path, boolean dash);
 
     @Override
     public native void start();
@@ -163,11 +169,12 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void prepareQualityAsync(String path) {
-        _prepare_next(path, true);
-    }
-
-    public void prepareNextAsync(String path) {
-        _prepare_next(path, false);
+        List<BipDataSource> bipDataSources = new ArrayList<>();
+        BipDataSource bipDataSource = new BipDataSource();
+        bipDataSource.source = path;
+        bipDataSource.isSync = true;
+        bipDataSources.add(bipDataSource);
+        prepareQualityAsync(bipDataSources);
     }
 
     @Override
@@ -229,7 +236,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
             mOnBufferingUpdateListener.onBufferingUpdate(this, percent);
     }
 
-    public native void _prepareAsync();
+    public native void _prepareAsync(BipDataSource[] bipDataSources);
 
     private native void _setVideoSurface(Surface surface);
 
@@ -365,7 +372,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
         ContentResolver resolver = context.getContentResolver();
         try (AssetFileDescriptor fd = resolver.openAssetFileDescriptor(uri, "r")) {
             if (fd != null) {
-                setDataSource(fd.getFileDescriptor());
+                setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getDeclaredLength());
                 return;
             }
         } catch (Exception ignored) {
@@ -375,10 +382,7 @@ public final class DefaultBIPPlayer implements BIPPlayer {
 
     @Override
     public void setDataSource(FileDescriptor fd) {
-        try (ParcelFileDescriptor pfd = ParcelFileDescriptor.dup(fd)) {
-            _setDataSourceFd(pfd.getFd());
-        } catch (Exception ignore) {
-        }
+        setDataSource(fd, 0, 0);
     }
 
     /**
@@ -386,14 +390,39 @@ public final class DefaultBIPPlayer implements BIPPlayer {
      */
     @Override
     public void setDataSource(FileDescriptor fd, long offset, long length) {
-        setDataSource(fd);
+        try {
+            ParcelFileDescriptor pfd = ParcelFileDescriptor.dup(fd);
+            List<BipDataSource> bipDataSources = new ArrayList<>();
+            BipDataSource bipDataSource = new BipDataSource();
+            bipDataSource.source = "fd:" + pfd.getFd();
+            bipDataSource.keepFD = pfd;
+            bipDataSource.startOffset = offset;
+            bipDataSources.add(bipDataSource);
+            setDataSource(bipDataSources);
+        } catch (Exception ignore) {
+        }
     }
-
-    public native void _setDataSource(String path);
-
-    public native void _setDataSourceFd(int fd);
 
     public native float getSpeed();
 
     public native void setSpeed(float speed);
+
+    @Override
+    public void setDataSource(List<BipDataSource> bipDataSources) {
+        this.bipDataSources.clear();
+        if (bipDataSources != null) {
+            this.bipDataSources.addAll(bipDataSources);
+        }
+    }
+
+    @Override
+    public void prepareQualityAsync(List<BipDataSource> bipDataSources) {
+        if (bipDataSources != null && !bipDataSources.isEmpty()) {
+            for (BipDataSource source : bipDataSources) {
+                source.isSync = true;
+            }
+            setDataSource(bipDataSources);
+            prepareAsync();
+        }
+    }
 }

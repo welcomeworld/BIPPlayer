@@ -188,11 +188,14 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
             av_dict_set(&formatDic, iterator->first, iterator->second, 0);
             iterator++;
         }
+        if (prepareSource->startOffset != 0) {
+            avFormatContext->skip_initial_bytes = prepareSource->startOffset;
+        }
         protocolHook(inputPath, &formatDic);
         if (!strncmp(inputPath, "fd:", 3)) {
             fdAvioContext = new FdAVIOContext();
             fdAvioContext->openFromDescriptor(static_cast<int>(strtol(inputPath + 3, nullptr, 10)),
-                                              "rb");
+                                              "rb", prepareSource->startOffset);
             avFormatContext->pb = fdAvioContext->getAvioContext();
         }
         gettimeofday(&(interruptContext->readStartTime), nullptr);
@@ -544,10 +547,14 @@ void BipPlayer::msgLoop() {
                 break;
             case MSG_PREPARE: {
                 stopAndClearDataSources();
-                auto realDataSource = static_cast<BipDataSource *>(processMsg->obj);
-                auto prepareContext = new BipPrepareContext(this, realDataSource);
-                pthread_create(&(realDataSource->prepareThreadId), nullptr, preparePlayerThread,
-                               prepareContext);
+                auto bipDataSource =
+                        static_cast<std::deque<BipDataSource *> * > (processMsg->obj);
+                for (BipDataSource *source: *bipDataSource) {
+                    auto prepareContext = new BipPrepareContext(this, source);
+                    pthread_create(&(source->prepareThreadId), nullptr, preparePlayerThread,
+                                   prepareContext);
+                }
+                delete bipDataSource;
             }
                 break;
             case MSG_BUFFERING:
@@ -603,12 +610,11 @@ void BipPlayer::setPlaySpeed(float speed) {
 }
 
 void msg_delete_datasource_callback(void *object) {
-    delete (BipDataSource *) object;
-}
-
-void BipPlayer::setDataSource(char *inputSource) {
-    tempDataSource = new BipDataSource();
-    tempDataSource->source = inputSource;
+    auto bipDataSource = static_cast<std::deque<BipDataSource *> * > (object);
+    for (BipDataSource *source: *bipDataSource) {
+        delete source;
+    }
+    delete bipDataSource;
 }
 
 void BipPlayer::postStop() {
@@ -638,21 +644,10 @@ void BipPlayer::postRelease() {
     notifyMsg(MSG_RELEASE);
 }
 
-void BipPlayer::postPrepare() {
+void BipPlayer::postPrepare(std::deque<BipDataSource *> *bipDataSources) {
     auto *message = new BipMessage();
     message->what = MSG_PREPARE;
-    message->obj = tempDataSource;
-    message->free_l = msg_delete_datasource_callback;
-    notifyMsg(message);
-}
-
-void BipPlayer::postPrepareNext(char *inputSource, bool isSync) {
-    auto *message = new BipMessage();
-    message->what = MSG_PREPARE;
-    auto dataSource = new BipDataSource();
-    dataSource->source = inputSource;
-    dataSource->isSync = isSync;
-    message->obj = dataSource;
+    message->obj = bipDataSources;
     message->free_l = msg_delete_datasource_callback;
     notifyMsg(message);
 }

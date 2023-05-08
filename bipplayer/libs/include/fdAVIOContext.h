@@ -5,11 +5,15 @@
 #ifndef BIPPLAYER_FDAVIOCONTEXT_H
 #define BIPPLAYER_FDAVIOCONTEXT_H
 
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 #include "libavformat/avio.h"
 #include "libavcodec/avcodec.h"
+
 #ifdef __cplusplus
 }
 #endif
@@ -28,7 +32,7 @@ public:
 
     //! Associate a stream with a file that was previously opened for low-level I/O.
     //! The associated file will be automatically closed on destruction.
-    bool openFromDescriptor(int theFD, const char *theMode);
+    bool openFromDescriptor(int theFD, const char *theMode, long startOffset = 0);
 
     //! Access AVIO context.
     AVIOContext *getAvioContext() const;
