@@ -17,6 +17,9 @@ bool MediaTracker::isFrameReady() {
 }
 
 void MediaTracker::pushPacket(AVPacket *packet) {
+    if (!isStart()) {
+        return;
+    }
     bipPacketQueue->push(packet);
     if (duration > 0 && packet->dts != AV_NOPTS_VALUE) {
         double bufferPosition = trackTimeBase *

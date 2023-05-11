@@ -11,6 +11,7 @@ void BipPacketQueue::clear() {
         av_packet_free(&packet);
         packetQueue.pop();
     }
+    queueMemSize = 0;
     pthread_mutex_unlock(&packetMutex);
 }
 
