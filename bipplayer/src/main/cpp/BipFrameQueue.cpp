@@ -11,6 +11,7 @@ void BipFrameQueue::clear() {
         av_frame_free(&frame);
         audioFrameQueue.pop();
     }
+    queueMemSize = 0;
     pthread_mutex_unlock(&audioFrameMutex);
 }
 
