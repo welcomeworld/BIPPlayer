@@ -9,12 +9,13 @@ BipMessage *MessageQueue::next() {
         pthread_cond_wait(&msgCond, &msgMutex);
     }
     BipMessage *current = startMsg;
-    current = startMsg;
-    if (startMsg == endMsg) {
-        startMsg = nullptr;
-        endMsg = nullptr;
-    } else {
-        startMsg = current->next;
+    if (current != nullptr) {
+        if (startMsg == endMsg) {
+            startMsg = nullptr;
+            endMsg = nullptr;
+        } else {
+            startMsg = current->next;
+        }
     }
     pthread_mutex_unlock(&msgMutex);
     return current;
@@ -46,8 +47,34 @@ void MessageQueue::scheduleMsg(BipMessage *message) {
         startMsg = message;
         endMsg = message;
     } else {
-        endMsg->next = message;
-        endMsg = message;
+        if (startMsg->what == message->what) {
+            message->next = startMsg->next;
+            if (startMsg == endMsg) {
+                endMsg = message;
+            }
+            startMsg = message;
+        } else {
+            BipMessage *parentMessage = startMsg;
+            BipMessage *checkMessage = parentMessage->next;
+            bool hasSameMessage = false;
+            while (checkMessage != nullptr) {
+                if (checkMessage->what == message->what) {
+                    message->next = checkMessage->next;
+                    parentMessage->next = message;
+                    if (checkMessage == endMsg) {
+                        endMsg = message;
+                    }
+                    hasSameMessage = true;
+                    break;
+                }
+                parentMessage = checkMessage;
+                checkMessage = parentMessage->next;
+            }
+            if (!hasSameMessage) {
+                endMsg->next = message;
+                endMsg = message;
+            }
+        }
     }
     pthread_cond_signal(&msgCond);
     pthread_mutex_unlock(&msgMutex);
