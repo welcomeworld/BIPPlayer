@@ -53,6 +53,7 @@ public:
     bool audioEnable = true;
     std::atomic<int> sourceState = {STATE_CREATED};
     long seekPosition = 0;
+    bool directSeek = false;
     long startOffset = 0;
 };
 
@@ -113,6 +114,12 @@ private:
     static const int MEDIA_INFO_BUFFERING_START = 0;
     static const int MEDIA_INFO_BUFFERING_END = 1;
     static const int MEDIA_INFO_FPS = 2;
+
+    static const int LOCK_BREAK = -1; //已发生中断
+    static const int LOCK_FREE = 0; //没有操作等待锁
+    static const int STOP_REQUEST_WAIT = 1; //stop操作锁等待时间
+    static const int SEEK_REQUEST_WAIT = 100; //seek操作锁等待时间
+
     //AVFrame缓存大小，单位字节,默认25M
     int maxFrameBufSize = 1024 * 1024 * 25;
     //AVPacket缓存大小，单位字节,默认15M
@@ -132,7 +139,7 @@ private:
     pthread_t msgLoopThreadId = 0;
     pthread_t bufferingThreadId = 0;
     int bufferPercent = 0;
-    bool isRequestOptions = false;
+    int requestLockWaitTime = LOCK_FREE;  //请求锁时的超时中断时间
     pthread_mutex_t avOpsMutex{};
     std::deque<BipDataSource *> activeDataSources{};
 

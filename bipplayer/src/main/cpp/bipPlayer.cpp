@@ -111,9 +111,9 @@ void BipPlayer::stop() {
     if (isPlaying()) {
         pause();
     }
-    isRequestOptions = true;
+    requestLockWaitTime = STOP_REQUEST_WAIT;
     pthread_mutex_lock(&avOpsMutex);
-    isRequestOptions = false;
+    requestLockWaitTime = LOCK_FREE;
     stopAndClearDataSources();
     playerState = STATE_STOP;
     if (audioAvailable()) {
@@ -141,7 +141,8 @@ int BipPlayer::ffmpegInterruptCallback(void *ctx) {
     gettimeofday(&currentTime, nullptr);
     long diffTime = calculateTime(interruptContext->readStartTime, currentTime);
     BipPlayer *player = interruptContext->player;
-    if (player->isRequestOptions) {
+    if (player->requestLockWaitTime != LOCK_FREE && diffTime >= player->requestLockWaitTime) {
+        player->requestLockWaitTime = LOCK_BREAK;
         return 1;
     }
     if (interruptContext->readStartTime.tv_sec != 0 && diffTime > 30000) {
@@ -160,10 +161,10 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
     auto inputPath = prepareSource->source.c_str();
     LOGE("play prepare %s", inputPath);
     prepareSource->sourceState = BipDataSource::STATE_START;
+    playerState = STATE_START;
+    activeDataSources.push_front(prepareSource);
     char *errorMsg = static_cast<char *>(av_mallocz(1024));
     bool isPrepared = false;
-    bool isRestartPrepare = false;
-    bool isFromSeek = false;
     int retryTimes = 0;
     while (prepareSource->sourceState == BipDataSource::STATE_START) {
         //打开输入流
@@ -295,10 +296,9 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         if (prepareSource->seekPosition > 0) {
             syncClock = prepareSource->seekPosition;
             prepareSource->seekPosition = 0;
-            isFromSeek = true;
         } else if (prepareSource->isSync) {
             syncClock = static_cast<long>((shareClock->clock + 1) * 1000);
-        } else if (isRestartPrepare) {
+        } else if (isPrepared) {
             syncClock = static_cast<long>(shareClock->clock * 1000);
         }
         if (syncClock > 0 && duration > syncClock) {
@@ -314,18 +314,26 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
             prepareAudioTracker->startDecodeThread();
             setAudioTracker(prepareAudioTracker);
         }
-        if (!isRestartPrepare) {
-            playerState = STATE_START;
-            activeDataSources.push_front(prepareSource);
-            notifyInfo(MEDIA_INFO_BUFFERING_START);
-        } else if (isFromSeek) {
-            notifyInfo(MEDIA_INFO_BUFFERING_START);
-        }
         LOGE("start read frame loop");
         retryTimes = 0;
-        while (prepareSource->sourceState == BipDataSource::STATE_START &&
-               prepareSource->seekPosition == 0) {
+        bool needStart = !isPrepared || isPlaying();
+        if (needStart) {
+            notifyInfo(MEDIA_INFO_BUFFERING_START);
+        }
+        while (prepareSource->sourceState == BipDataSource::STATE_START) {
             pthread_mutex_lock(&avOpsMutex);
+            if (prepareSource->seekPosition != 0) {
+                if (prepareSource->directSeek) {
+                    av_seek_frame(avFormatContext, -1,
+                                  av_rescale(prepareSource->seekPosition, AV_TIME_BASE, 1000),
+                                  AVSEEK_FLAG_BACKWARD);
+                    prepareSource->seekPosition = 0;
+                    prepareSource->directSeek = false;
+                } else {
+                    pthread_mutex_unlock(&avOpsMutex);
+                    break;
+                }
+            }
             auto *avPacket = av_packet_alloc();
             gettimeofday(&(interruptContext->readStartTime), nullptr);
             int readResult = av_read_frame(avFormatContext, avPacket);
@@ -350,27 +358,15 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
                 av_usleep(50000);
             } else {
                 LOGE("break read frame loop for read result %d", readResult);
-                isRestartPrepare = true;
                 break;
             }
-            if (!isPrepared) {
-                isPrepared = checkCachePrepared();
+            if (needStart && checkCachePrepared()) {
+                needStart = false;
                 if (isPrepared) {
-                    if (prepareSource->isSync) {
-                        postStart();
-                    } else {
-                        notifyPrepared();
-                    }
-                }
-            } else if (isFromSeek) {
-                if (checkCachePrepared()) {
-                    isFromSeek = false;
                     postStart();
-                }
-            } else if (isRestartPrepare) {
-                if (checkCachePrepared()) {
-                    isRestartPrepare = false;
-                    postStart();
+                } else {
+                    isPrepared = true;
+                    notifyPrepared();
                 }
             }
         }
@@ -464,19 +460,33 @@ void BipPlayer::seekTo(long time) {
         if (duration <= 0) {
             return;
         }
-        isRequestOptions = true;
+        requestLockWaitTime = SEEK_REQUEST_WAIT;
         pthread_mutex_lock(&avOpsMutex);
-        isRequestOptions = false;
-        if (audioAvailable()) {
-            bipAudioTracker->stop();
-        }
-        if (videoAvailable()) {
-            bipVideoTracker->stop();
+        if (requestLockWaitTime == LOCK_BREAK) {
+            if (audioAvailable()) {
+                bipAudioTracker->stop();
+            }
+            if (videoAvailable()) {
+                bipVideoTracker->stop();
+            }
+            for (BipDataSource *source: activeDataSources) {
+                source->seekPosition = time;
+                source->directSeek = false;
+            }
+        } else {
+            if (audioAvailable()) {
+                bipAudioTracker->clearCache();
+            }
+            if (videoAvailable()) {
+                bipVideoTracker->clearCache();
+            }
+            for (BipDataSource *source: activeDataSources) {
+                source->seekPosition = time;
+                source->directSeek = true;
+            }
         }
         shareClock->clock = (double) (time) / 1000;
-        for (BipDataSource *source: activeDataSources) {
-            source->seekPosition = time;
-        }
+        requestLockWaitTime = LOCK_FREE;
         pthread_mutex_unlock(&avOpsMutex);
         postEventFromNative(MEDIA_SEEK_COMPLETE, 0, 0, nullptr);
     }
