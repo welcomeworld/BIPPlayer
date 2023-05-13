@@ -29,3 +29,19 @@ void MediaTracker::pushPacket(AVPacket *packet) {
     }
 }
 
+MediaTracker::MediaTracker() {
+    pthread_mutex_init(&mutex, nullptr);
+}
+
+MediaTracker::~MediaTracker() {
+    pthread_mutex_destroy(&mutex);
+}
+
+void MediaTracker::lock() {
+    pthread_mutex_lock(&mutex);
+}
+
+void MediaTracker::unlock() {
+    pthread_mutex_unlock(&mutex);
+}
+

@@ -4,7 +4,10 @@
 #include "BipVideoTracker.h"
 
 void BipVideoTracker::clearCache() {
+    lock();
     avcodec_flush_buffers(avCodecContext);
+    unlock();
+    isCacheCompleted = false;
     bipFrameQueue->clear();
     bipPacketQueue->clear();
 }
@@ -123,26 +126,27 @@ unsigned long BipVideoTracker::getFrameSize() {
 }
 
 void BipVideoTracker::pause() {
-    trackerState = STATE_PAUSE;
-    if (playThreadId != 0 && pthread_kill(playThreadId, 0) == 0) {
-        pthread_join(playThreadId, nullptr);
-        playThreadId = 0;
+    if (isPlaying()) {
+        trackerState = STATE_PAUSE;
+        if (playThreadId != 0 && pthread_kill(playThreadId, 0) == 0) {
+            pthread_join(playThreadId, nullptr);
+            playThreadId = 0;
+        }
     }
 }
 
 void BipVideoTracker::stop() {
-    if (isPlaying()) {
-        pause();
+    pause();
+    if (isStart()) {
+        trackerState = STATE_STOP;
+        bipPacketQueue->notifyAll();
+        bipFrameQueue->notifyAll();
+        if (decodeThreadId != 0 && pthread_kill(decodeThreadId, 0) == 0) {
+            pthread_join(decodeThreadId, nullptr);
+            decodeThreadId = 0;
+        }
+        clearCache();
     }
-    trackerState = STATE_STOP;
-    bipPacketQueue->notifyAll();
-    bipFrameQueue->notifyAll();
-    if (decodeThreadId != 0 && pthread_kill(decodeThreadId, 0) == 0) {
-        pthread_join(decodeThreadId, nullptr);
-        decodeThreadId = 0;
-    }
-    LOGE("videoCache thread stop");
-    clearCache();
 }
 
 BipVideoTracker::BipVideoTracker(BipNativeWindow *nativeWindow, AVCodecParameters *codecPar,
@@ -252,12 +256,21 @@ void BipVideoTracker::decodeInner() {
         if (packet == nullptr) {
             continue;
         }
+        lock();
         avcodec_send_packet(avCodecContext, packet);
+        unlock();
         av_packet_free(&packet);
         AVFrame *frame = av_frame_alloc();
-        while (!avcodec_receive_frame(avCodecContext, frame)) {
-            bipFrameQueue->push(frame);
-            frame = av_frame_alloc();
+        while (true) {
+            lock();
+            int result = avcodec_receive_frame(avCodecContext, frame);
+            unlock();
+            if (!result) {
+                bipFrameQueue->push(frame);
+                frame = av_frame_alloc();
+            } else {
+                break;
+            }
         }
         av_frame_free(&frame);
     }

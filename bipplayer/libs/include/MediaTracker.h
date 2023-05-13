@@ -26,6 +26,16 @@ protected:
     double trackerClock{};//内部时钟,单位秒
     pthread_t decodeThreadId = 0;
     pthread_t playThreadId = 0;//音频处理线程id
+    pthread_mutex_t mutex{};
+
+    MediaTracker();
+
+    ~MediaTracker();
+
+    void lock();
+
+    void unlock();
+
 public:
     static const int STATE_ERROR = -1;
     static const int STATE_CREATED = 0;

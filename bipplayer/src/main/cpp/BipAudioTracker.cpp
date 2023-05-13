@@ -217,7 +217,10 @@ void BipAudioTracker::setPlaySpeed(float speed) {
 }
 
 void BipAudioTracker::clearCache() {
+    lock();
     avcodec_flush_buffers(audioCodecContext);
+    unlock();
+    isCacheCompleted = false;
     bipFrameQueue->clear();
     bipPacketQueue->clear();
 }
@@ -227,21 +230,26 @@ unsigned long BipAudioTracker::getFrameSize() {
 }
 
 void BipAudioTracker::pause() {
-    trackerState = STATE_PAUSE;
-    (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_PAUSED);
+    if (isPlaying()) {
+        trackerState = STATE_PAUSE;
+        (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_PAUSED);
+    }
 }
 
 void BipAudioTracker::stop() {
-    trackerState = STATE_STOP;
-    (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_STOPPED);
-    trackerClock = 0;
-    bipPacketQueue->notifyAll();
-    bipFrameQueue->notifyAll();
-    if (decodeThreadId != 0 && pthread_kill(decodeThreadId, 0) == 0) {
-        pthread_join(decodeThreadId, nullptr);
-        decodeThreadId = 0;
+    pause();
+    if (isStart()) {
+        trackerState = STATE_STOP;
+        (*slPlayItf)->SetPlayState(slPlayItf, SL_PLAYSTATE_STOPPED);
+        trackerClock = 0;
+        bipPacketQueue->notifyAll();
+        bipFrameQueue->notifyAll();
+        if (decodeThreadId != 0 && pthread_kill(decodeThreadId, 0) == 0) {
+            pthread_join(decodeThreadId, nullptr);
+            decodeThreadId = 0;
+        }
+        clearCache();
     }
-    clearCache();
 }
 
 void BipAudioTracker::decodeInner() {
@@ -252,9 +260,11 @@ void BipAudioTracker::decodeInner() {
             continue;
         }
         AVFrame *frame = av_frame_alloc();
+        lock();
         avcodec_send_packet(audioCodecContext, packet);
         av_packet_free(&packet);
         int receiveResult = avcodec_receive_frame(audioCodecContext, frame);
+        unlock();
         if (!receiveResult) {
             bipFrameQueue->push(frame);
         } else {
