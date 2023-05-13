@@ -17,7 +17,7 @@ void BipVideoTracker::showVideoPacket() {
     , diff   //音频帧与视频帧相差时间
     , sync_threshold; //音视频差距界限
     long showFrameStartTime = av_gettime();  //展示一帧开始的时间
-    long showFrameEndTime = 0; //一帧成功展示的时间
+    long showFrameEndTime; //一帧成功展示的时间
     long realSleepTime; //展示一帧后当前帧剩余时间,单位微秒
     //上次计算fps的时间节点,单位毫秒，大于九百毫秒计算一次
     long realFpsMarkTime = av_gettime();
@@ -124,9 +124,16 @@ unsigned long BipVideoTracker::getFrameSize() {
 
 void BipVideoTracker::pause() {
     trackerState = STATE_PAUSE;
+    if (playThreadId != 0 && pthread_kill(playThreadId, 0) == 0) {
+        pthread_join(playThreadId, nullptr);
+        playThreadId = 0;
+    }
 }
 
 void BipVideoTracker::stop() {
+    if (isPlaying()) {
+        pause();
+    }
     trackerState = STATE_STOP;
     bipPacketQueue->notifyAll();
     bipFrameQueue->notifyAll();
@@ -135,11 +142,6 @@ void BipVideoTracker::stop() {
         decodeThreadId = 0;
     }
     LOGE("videoCache thread stop");
-    if (playThreadId != 0 && pthread_kill(playThreadId, 0) == 0) {
-        pthread_join(playThreadId, nullptr);
-        playThreadId = 0;
-    }
-    LOGE("videoPlay thread stop");
     clearCache();
 }
 
