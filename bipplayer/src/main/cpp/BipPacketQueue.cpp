@@ -32,8 +32,7 @@ AVPacket *BipPacketQueue::pop(bool block) {
 }
 
 
-BipPacketQueue::BipPacketQueue(long maxQueueSize) {
-    this->maxQueueMemSize = maxQueueSize;
+BipPacketQueue::BipPacketQueue() {
     pthread_mutex_init(&packetMutex, nullptr);
     pthread_cond_init(&packetCond, nullptr);
 }
@@ -45,7 +44,7 @@ BipPacketQueue::~BipPacketQueue() {
 
 void BipPacketQueue::push(AVPacket *packet) {
     pthread_mutex_lock(&packetMutex);
-    if (getQueueMemSize() > maxQueueMemSize) {
+    if (size() > MIN_PACKET_SIZE && getQueueMemSize() > maxQueueMemSize) {
         pthread_cond_wait(&packetCond, &packetMutex);
     }
     packetQueue.push(packet);

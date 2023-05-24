@@ -108,11 +108,9 @@ void BipPlayer::stop() {
     if (!isStarted()) {
         return;
     }
-    if (isPlaying()) {
-        pause();
-    }
+    pause();
     requestLockWaitTime = STOP_REQUEST_WAIT;
-    pthread_mutex_lock(&avOpsMutex);
+    lock();
     requestLockWaitTime = LOCK_FREE;
     stopAndClearDataSources();
     playerState = STATE_STOP;
@@ -122,7 +120,7 @@ void BipPlayer::stop() {
     if (videoAvailable()) {
         bipVideoTracker->stop();
     }
-    pthread_mutex_unlock(&avOpsMutex);
+    unlock();
     LOGE("prepare thread stop");
     setPlaySpeed(1.0f);
 }
@@ -148,6 +146,9 @@ int BipPlayer::ffmpegInterruptCallback(void *ctx) {
     if (interruptContext->readStartTime.tv_sec != 0 && diffTime > 30000) {
         return 1;
     }
+    if (interruptContext->source->sourceState != BipDataSource::STATE_START) {
+        return 1;
+    }
     return 0;
 }
 
@@ -161,12 +162,10 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
     auto inputPath = prepareSource->source.c_str();
     LOGE("play prepare %s", inputPath);
     prepareSource->sourceState = BipDataSource::STATE_START;
-    playerState = STATE_START;
-    activeDataSources.push_front(prepareSource);
     char *errorMsg = static_cast<char *>(av_mallocz(1024));
-    bool isPrepared = false;
+    bool isFromErrorRestart = false;
     int retryTimes = 0;
-    while (prepareSource->sourceState == BipDataSource::STATE_START) {
+    while (prepareSource->sourceState == BipDataSource::STATE_START && isStarted()) {
         //打开输入流
         auto *interruptContext = new InterruptContext();
         int prepareResult = 0;
@@ -179,6 +178,7 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         AVFormatContext *avFormatContext = avformat_alloc_context();
         LOGE("format adder %p", avFormatContext);
         interruptContext->player = this;
+        interruptContext->source = prepareSource;
         avFormatContext->interrupt_callback.callback = ffmpegInterruptCallback;
         avFormatContext->interrupt_callback.opaque = interruptContext;
         av_dict_set(&formatDic, "bufsize", "655360", 0);
@@ -201,29 +201,19 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         }
         gettimeofday(&(interruptContext->readStartTime), nullptr);
         prepareResult = avformat_open_input(&avFormatContext, inputPath, nullptr, &formatDic);
-        if (prepareResult != 0) {
-            av_strerror(prepareResult, errorMsg, 1024);
-            LOGE("open input error %s", errorMsg);
-            if (retryTimes > MAX_ERROR_RETRY) {
-                prepareSource->sourceState = BipDataSource::STATE_ERROR;
-                notifyError(ERROR_PREPARE_FAILED, prepareResult);
-            } else {
-                av_usleep(300000);
-                retryTimes++;
-            }
-            delete interruptContext;
-            delete fdAvioContext;
-            avformat_free_context(avFormatContext);
-            continue;
+        if (prepareResult == 0) {
+            gettimeofday(&(interruptContext->readStartTime), nullptr);
+            prepareResult = avformat_find_stream_info(avFormatContext, nullptr);
         }
-        gettimeofday(&(interruptContext->readStartTime), nullptr);
-        prepareResult = avformat_find_stream_info(avFormatContext, nullptr);
         if (prepareResult != 0) {
             av_strerror(prepareResult, errorMsg, 1024);
-            LOGE("find stream info error %s", errorMsg);
+            LOGE("prepare media error %s", errorMsg);
             if (retryTimes > MAX_ERROR_RETRY) {
                 prepareSource->sourceState = BipDataSource::STATE_ERROR;
-                notifyError(ERROR_PREPARE_FAILED, prepareResult);
+                if (playerState != STATE_ERROR) {
+                    playerState = STATE_ERROR;
+                    notifyError(ERROR_PREPARE_FAILED, prepareResult);
+                }
             } else {
                 av_usleep(300000);
                 retryTimes++;
@@ -251,17 +241,8 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
                         fps);
                 if (prepareVideoTracker->trackerState == MediaTracker::STATE_ERROR) {
                     LOGE("prepare video tracker error");
-                    if (retryTimes > MAX_ERROR_RETRY) {
-                        prepareSource->sourceState = BipDataSource::STATE_ERROR;
-                        notifyError(ERROR_PREPARE_FAILED, 233);
-                    } else {
-                        av_usleep(300000);
-                        retryTimes++;
-                    }
-                    delete interruptContext;
-                    delete fdAvioContext;
-                    avformat_free_context(avFormatContext);
-                    continue;
+                    prepareResult = -1;
+                    break;
                 }
             } else if (prepareSource->audioEnable &&
                        avFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -272,19 +253,27 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
                         avFormatContext->streams[i]->codecpar);
                 if (prepareAudioTracker->trackerState == MediaTracker::STATE_ERROR) {
                     LOGE("prepare audio tracker error");
-                    if (retryTimes > MAX_ERROR_RETRY) {
-                        prepareSource->sourceState = BipDataSource::STATE_ERROR;
-                        notifyError(ERROR_PREPARE_FAILED, 233);
-                    } else {
-                        av_usleep(300000);
-                        retryTimes++;
-                    }
-                    delete interruptContext;
-                    delete fdAvioContext;
-                    avformat_free_context(avFormatContext);
-                    continue;
+                    prepareResult = -1;
+                    break;
                 }
             }
+        }
+        if (prepareResult != 0) {
+            LOGE("prepare create tracker error %s", errorMsg);
+            if (retryTimes > MAX_ERROR_RETRY) {
+                prepareSource->sourceState = BipDataSource::STATE_ERROR;
+                if (playerState != STATE_ERROR) {
+                    playerState = STATE_ERROR;
+                    notifyError(ERROR_PREPARE_FAILED, prepareResult);
+                }
+            } else {
+                av_usleep(300000);
+                retryTimes++;
+            }
+            delete interruptContext;
+            delete fdAvioContext;
+            avformat_free_context(avFormatContext);
+            continue;
         }
         if (prepareSource->isSingleSource && prepareVideoTracker != nullptr &&
             prepareAudioTracker == nullptr) {
@@ -296,12 +285,10 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         if (prepareSource->seekPosition > 0) {
             syncClock = prepareSource->seekPosition;
             prepareSource->seekPosition = 0;
-        } else if (prepareSource->isSync) {
-            syncClock = static_cast<long>((shareClock->clock + 1) * 1000);
-        } else if (isPrepared) {
+        } else if (prepareSource->isSync || isFromErrorRestart) {
             syncClock = static_cast<long>(shareClock->clock * 1000);
         }
-        if (syncClock > 0 && duration > syncClock) {
+        if (syncClock > 0 && duration > syncClock + 1000) {
             av_seek_frame(avFormatContext, -1, av_rescale(syncClock, AV_TIME_BASE, 1000),
                           AVSEEK_FLAG_BACKWARD);
         }
@@ -316,12 +303,14 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         }
         LOGE("start read frame loop");
         retryTimes = 0;
-        bool needStart = !isPrepared || isPlaying();
-        if (needStart) {
-            notifyInfo(MEDIA_INFO_BUFFERING_START);
+        bool isClockMaintainThread = prepareAudioTracker != nullptr ||
+                                     (prepareVideoTracker != nullptr &&
+                                      prepareVideoTracker->clockMaintain);
+        if (isClockMaintainThread && !hasNotifyPrepared) {
+            requestBuffering();
         }
-        while (prepareSource->sourceState == BipDataSource::STATE_START) {
-            pthread_mutex_lock(&avOpsMutex);
+        while (prepareSource->sourceState == BipDataSource::STATE_START && isStarted()) {
+            lock();
             if (prepareSource->seekPosition != 0) {
                 if (prepareSource->directSeek) {
                     av_seek_frame(avFormatContext, -1,
@@ -330,14 +319,14 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
                     prepareSource->seekPosition = 0;
                     prepareSource->directSeek = false;
                 } else {
-                    pthread_mutex_unlock(&avOpsMutex);
+                    unlock();
                     break;
                 }
             }
             auto *avPacket = av_packet_alloc();
             gettimeofday(&(interruptContext->readStartTime), nullptr);
             int readResult = av_read_frame(avFormatContext, avPacket);
-            pthread_mutex_unlock(&avOpsMutex);
+            unlock();
             if (readResult >= 0) {
                 if (avPacket->stream_index == video_index) {
                     prepareVideoTracker->pushPacket(avPacket);
@@ -357,17 +346,9 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
                 }
                 av_usleep(50000);
             } else {
+                isFromErrorRestart = true;
                 LOGE("break read frame loop for read result %d", readResult);
                 break;
-            }
-            if (needStart && checkCachePrepared()) {
-                needStart = false;
-                if (isPrepared) {
-                    postStart();
-                } else {
-                    isPrepared = true;
-                    notifyPrepared();
-                }
             }
         }
         delete interruptContext;
@@ -379,29 +360,23 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
 }
 
 bool BipPlayer::checkCachePrepared() {
-    bool completed = true;
-    if (videoAvailable() && !bipVideoTracker->isFrameReady()) {
-        completed = false;
+    unsigned long sourceSize = activeDataSources.size();
+    if (videoAvailable() && bipVideoTracker->isFrameReady()) {
+        sourceSize -= 1;
     }
-    if (audioAvailable() && !bipAudioTracker->isFrameReady()) {
-        completed = false;
+    if (audioAvailable() && bipAudioTracker->isFrameReady()) {
+        sourceSize -= 1;
     }
-    if (completed) {
-        if (videoAvailable()) {
-            bipVideoTracker->bufferingTimes++;
-        }
-        if (audioAvailable()) {
-            bipAudioTracker->bufferingTimes++;
-        }
-        notifyInfo(MEDIA_INFO_BUFFERING_END);
-    }
-    return completed;
+    return sourceSize <= 0;
 }
 
 void BipPlayer::notifyPrepared() {
-    postEventFromNative(MEDIA_PREPARED, 0, 0, nullptr);
-    if (startOnPrepared) {
-        postStart();
+    if (!hasNotifyPrepared) {
+        hasNotifyPrepared = true;
+        postEventFromNative(MEDIA_PREPARED, 0, 0, nullptr);
+        if (startOnPrepared) {
+            postStart();
+        }
     }
 }
 
@@ -461,7 +436,7 @@ void BipPlayer::seekTo(long time) {
             return;
         }
         requestLockWaitTime = SEEK_REQUEST_WAIT;
-        pthread_mutex_lock(&avOpsMutex);
+        lock();
         if (requestLockWaitTime == LOCK_BREAK) {
             if (audioAvailable()) {
                 bipAudioTracker->stop();
@@ -474,6 +449,7 @@ void BipPlayer::seekTo(long time) {
                 source->directSeek = false;
             }
         } else {
+            pause();
             if (audioAvailable()) {
                 bipAudioTracker->clearCache();
             }
@@ -487,18 +463,21 @@ void BipPlayer::seekTo(long time) {
         }
         shareClock->clock = (double) (time) / 1000;
         requestLockWaitTime = LOCK_FREE;
-        pthread_mutex_unlock(&avOpsMutex);
+        unlock();
+        checkBuffering();
         postEventFromNative(MEDIA_SEEK_COMPLETE, 0, 0, nullptr);
     }
 }
 
 void BipPlayer::pause() {
-    playerState = STATE_PAUSE;
-    if (audioAvailable()) {
-        bipAudioTracker->pause();
-    }
-    if (videoAvailable()) {
-        bipVideoTracker->pause();
+    if (isPlaying()) {
+        playerState = STATE_PAUSE;
+        if (audioAvailable()) {
+            bipAudioTracker->pause();
+        }
+        if (videoAvailable()) {
+            bipVideoTracker->pause();
+        }
     }
 }
 
@@ -557,9 +536,12 @@ void BipPlayer::msgLoop() {
                 break;
             case MSG_PREPARE: {
                 stopAndClearDataSources();
+                playerState = STATE_START;
+                hasNotifyPrepared = false;
                 auto bipDataSource =
                         static_cast<std::deque<BipDataSource *> * > (processMsg->obj);
                 for (BipDataSource *source: *bipDataSource) {
+                    activeDataSources.push_front(source);
                     auto prepareContext = new BipPrepareContext(this, source);
                     pthread_create(&(source->prepareThreadId), nullptr, preparePlayerThread,
                                    prepareContext);
@@ -688,13 +670,24 @@ void *BipPlayer::bufferingThread(void *args) {
 
 void BipPlayer::checkBuffering() {
     notifyInfo(MEDIA_INFO_BUFFERING_START);
-    while (true) {
+    while (isStarted()) {
         if (checkCachePrepared()) {
-            postStart();
+            if (hasNotifyPrepared) {
+                postStart();
+            } else {
+                notifyPrepared();
+            }
             break;
         }
         av_usleep(500000);
     }
+    if (videoAvailable()) {
+        bipVideoTracker->bufferingTimes++;
+    }
+    if (audioAvailable()) {
+        bipAudioTracker->bufferingTimes++;
+    }
+    notifyInfo(MEDIA_INFO_BUFFERING_END);
     bufferingThreadId = 0;
 }
 
@@ -723,8 +716,8 @@ BipAudioTracker *BipPlayer::createAudioTracker(double trackTimeBase, AVCodecPara
     audioTracker->trackTimeBase = trackTimeBase;
     audioTracker->duration = duration;
     audioTracker->trackerCallback = this;
-    audioTracker->maxPacketBufSize = maxPacketBufSize;
-    audioTracker->maxFrameBufSize = maxFrameBufSize;
+    audioTracker->setMaxPacketBufSize(maxPacketBufSize);
+    audioTracker->setMaxFrameBufSize(maxFrameBufSize);
     return audioTracker;
 }
 
@@ -753,8 +746,8 @@ BipPlayer::createVideoTracker(double trackTimeBase, AVCodecParameters *codecPar,
     videoTracker->trackTimeBase = trackTimeBase;
     videoTracker->duration = duration;
     videoTracker->trackerCallback = this;
-    videoTracker->maxPacketBufSize = maxPacketBufSize;
-    videoTracker->maxFrameBufSize = maxFrameBufSize;
+    videoTracker->setMaxPacketBufSize(maxPacketBufSize);
+    videoTracker->setMaxFrameBufSize(maxFrameBufSize);
     videoTracker->fps = fps;
     return videoTracker;
 }
@@ -789,6 +782,14 @@ void BipPlayer::updateBufferPercent() {
         bufferPercent = percent;
         postEventFromNative(MEDIA_BUFFERING_UPDATE, bufferPercent, 0, nullptr);
     }
+}
+
+void BipPlayer::lock() {
+    pthread_mutex_lock(&avOpsMutex);
+}
+
+void BipPlayer::unlock() {
+    pthread_mutex_unlock(&avOpsMutex);
 }
 
 

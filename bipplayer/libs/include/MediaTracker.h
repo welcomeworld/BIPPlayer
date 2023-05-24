@@ -48,11 +48,6 @@ public:
     SyncClock *shareClock = nullptr;
     double trackTimeBase{};
 
-    //AVFrame缓存大小，单位字节,默认25M
-    int maxFrameBufSize = 1024 * 1024 * 25;
-    //AVPacket缓存大小，单位字节,默认15M
-    int maxPacketBufSize = 1024 * 1024 * 15;
-
     bool isCacheCompleted = false;
 
     bool clockMaintain = false;
@@ -84,6 +79,10 @@ public:
     bool isFrameReady();
 
     virtual void startDecodeThread() = 0;
+
+    void setMaxFrameBufSize(long maxSize);
+
+    void setMaxPacketBufSize(long maxSize);
 };
 
 #endif //BIPPLAYER_MEDIATRACKER_H

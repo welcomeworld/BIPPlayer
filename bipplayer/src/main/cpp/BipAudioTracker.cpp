@@ -93,6 +93,10 @@ int BipAudioTracker::getPcm() {
                                     (const uint8_t **) (audioFrame->data),
                                     audioFrame->nb_samples);
         int size = 0;
+        if (outSample == 0) {
+            av_frame_free(&audioFrame);
+            continue;
+        }
         soundtouch->putSamples(reinterpret_cast<const soundtouch::SAMPLETYPE *>(audioBuffer),
                                outSample);
         int soundOutSample = 0;
@@ -120,6 +124,9 @@ int BipAudioTracker::getPcm() {
         }
         av_frame_free(&audioFrame);
         return size;
+    }
+    if (isPlaying()) {
+        trackerState = STATE_PAUSE;
     }
     if (clockMaintain && trackerCallback != nullptr) {
         trackerCallback->reportPlayStateChange(false);
@@ -153,8 +160,8 @@ BipAudioTracker::BipAudioTracker(AVCodecParameters *codecPar) {
     createMixVolume();
     createPlayer();
     initSoundTouch();
-    bipFrameQueue = new BipFrameQueue(maxFrameBufSize, true);
-    bipPacketQueue = new BipPacketQueue(maxPacketBufSize);
+    bipFrameQueue = new BipFrameQueue(true);
+    bipPacketQueue = new BipPacketQueue();
     audioBuffer = static_cast<uint8_t *>(av_mallocz(1024 * 48));
     trackerState = STATE_CREATED;
 }
@@ -265,7 +272,9 @@ void BipAudioTracker::decodeInner() {
         av_packet_free(&packet);
         int receiveResult = avcodec_receive_frame(audioCodecContext, frame);
         unlock();
-        if (!receiveResult) {
+        bool discard = frame->pts != AV_NOPTS_VALUE &&
+                       static_cast<double>(frame->pts) * trackTimeBase < shareClock->clock;
+        if (!receiveResult && !discard) {
             bipFrameQueue->push(frame);
         } else {
             LOGW("free audio frame %p", &frame);
@@ -286,8 +295,10 @@ void *BipAudioTracker::decodeThread(void *args) {
 }
 
 void BipAudioTracker::play() {
-    trackerState = STATE_PLAYING;
-    pthread_create(&playThreadId, nullptr, playThread, this);//开启begin线程
+    if (isStart() && !isPlaying()) {
+        trackerState = STATE_PLAYING;
+        pthread_create(&playThreadId, nullptr, playThread, this);//开启begin线程
+    }
 }
 
 void *BipAudioTracker::playThread(void *args) {

@@ -13,7 +13,8 @@ bool MediaTracker::isPlaying() {
 
 bool MediaTracker::isFrameReady() {
     return getFrameSize() >= bufferingTimes * bufferingReadyFrameSize ||
-           bipFrameQueue->getQueueMemSize() >= bipFrameQueue->maxQueueMemSize;
+           bipFrameQueue->getQueueMemSize() >= bipFrameQueue->maxQueueMemSize ||
+           isCacheCompleted;
 }
 
 void MediaTracker::pushPacket(AVPacket *packet) {
@@ -43,5 +44,13 @@ void MediaTracker::lock() {
 
 void MediaTracker::unlock() {
     pthread_mutex_unlock(&mutex);
+}
+
+void MediaTracker::setMaxFrameBufSize(long maxSize) {
+    bipFrameQueue->maxQueueMemSize = maxSize;
+}
+
+void MediaTracker::setMaxPacketBufSize(long maxSize) {
+    bipPacketQueue->maxQueueMemSize = maxSize;
 }
 

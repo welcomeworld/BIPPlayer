@@ -18,6 +18,7 @@ extern "C" {
 #endif
 
 class BipFrameQueue {
+    static const int MIN_FRAME_SIZE = 10;
     std::queue<AVFrame *> audioFrameQueue{};
     pthread_mutex_t audioFrameMutex{};
     pthread_cond_t audioFrameCond{};
@@ -40,7 +41,7 @@ public:
 
     unsigned long size();
 
-    BipFrameQueue(long maxQueueSize, bool isAudioFrame);
+    BipFrameQueue(bool isAudioFrame);
 
     long getQueueMemSize() const;
 

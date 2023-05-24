@@ -71,6 +71,7 @@ private:
     static const int MSG_BUFFERING = 0x241;
 
     //播放器状态
+    static const int STATE_ERROR = -1;
     static const int STATE_CREATED = 0;
     static const int STATE_START = 1;
     static const int STATE_PLAYING = 2;
@@ -95,6 +96,7 @@ private:
     public:
         timeval readStartTime;
         BipPlayer *player = nullptr;
+        BipDataSource *source = nullptr;
     };
 
     //播放器事件码
@@ -142,6 +144,7 @@ private:
     int requestLockWaitTime = LOCK_FREE;  //请求锁时的超时中断时间
     pthread_mutex_t avOpsMutex{};
     std::deque<BipDataSource *> activeDataSources{};
+    bool hasNotifyPrepared = false;
 
     static int ffmpegInterruptCallback(void *ctx);
 
@@ -189,6 +192,10 @@ private:
     void checkBuffering();
 
     void updateBufferPercent();
+
+    void lock();
+
+    void unlock();
 
 public:
     static jclass defaultBIPPlayerClass;

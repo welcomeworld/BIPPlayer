@@ -3,12 +3,12 @@ package com.github.welcomeworld.bipplayer;
 import android.os.ParcelFileDescriptor;
 
 public class BipDataSource {
-    String source;
-    boolean isSingleSource = true;
-    boolean isSync = false;
-    boolean videoEnable = true;
-    boolean audioEnable = true;
-    long seekPosition = 0;
-    long startOffset = 0;
-    ParcelFileDescriptor keepFD;
+    public String source;
+    public boolean isSingleSource = true;
+    public boolean isSync = false;
+    public boolean videoEnable = true;
+    public boolean audioEnable = true;
+    public long seekPosition = 0;
+    public long startOffset = 0;
+    public ParcelFileDescriptor keepFD;
 }

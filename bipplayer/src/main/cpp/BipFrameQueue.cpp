@@ -32,8 +32,7 @@ AVFrame *BipFrameQueue::pop(bool block) {
 }
 
 
-BipFrameQueue::BipFrameQueue(long maxQueueSize, bool isAudioFrame) {
-    this->maxQueueMemSize = maxQueueSize;
+BipFrameQueue::BipFrameQueue(bool isAudioFrame) {
     this->isAudioFrame = isAudioFrame;
     pthread_mutex_init(&audioFrameMutex, nullptr);
     pthread_cond_init(&audioFrameCond, nullptr);
@@ -46,7 +45,7 @@ BipFrameQueue::~BipFrameQueue() {
 
 void BipFrameQueue::push(AVFrame *frame) {
     pthread_mutex_lock(&audioFrameMutex);
-    if (getQueueMemSize() > maxQueueMemSize) {
+    if (size() > MIN_FRAME_SIZE && getQueueMemSize() > maxQueueMemSize) {
         pthread_cond_wait(&audioFrameCond, &audioFrameMutex);
     }
     audioFrameQueue.push(frame);

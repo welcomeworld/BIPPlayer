@@ -103,6 +103,9 @@ void BipVideoTracker::showVideoPacket() {
         showFrameStartTime = av_gettime();
         av_frame_free(&frame);
     }
+    if (isPlaying()) {
+        trackerState = STATE_PAUSE;
+    }
     if (clockMaintain && trackerCallback != nullptr) {
         trackerCallback->reportPlayStateChange(false);
     }
@@ -152,8 +155,8 @@ void BipVideoTracker::stop() {
 BipVideoTracker::BipVideoTracker(BipNativeWindow *nativeWindow, AVCodecParameters *codecPar,
                                  AVDictionary *codecDic, AVDictionary *swsDic, bool mediacodec) {
     bipNativeWindow = nativeWindow;
-    bipFrameQueue = new BipFrameQueue(maxFrameBufSize, false);
-    bipPacketQueue = new BipPacketQueue(maxPacketBufSize);
+    bipFrameQueue = new BipFrameQueue(false);
+    bipPacketQueue = new BipPacketQueue();
     rgb_frame = av_frame_alloc();
 
     //打开视频解码器
@@ -164,6 +167,10 @@ BipVideoTracker::BipVideoTracker(BipNativeWindow *nativeWindow, AVCodecParameter
     }
     if (avCodec == nullptr) {
         avCodec = avcodec_find_decoder(videoCodecID);
+    }
+    if (avCodec == nullptr) {
+        trackerState = STATE_ERROR;
+        return;
     }
     avCodecContext = avcodec_alloc_context3(avCodec);
     avcodec_parameters_to_context(avCodecContext, codecPar);
@@ -266,6 +273,12 @@ void BipVideoTracker::decodeInner() {
             int result = avcodec_receive_frame(avCodecContext, frame);
             unlock();
             if (!result) {
+                double decodeTime = static_cast<double>(frame->pts) * trackTimeBase;
+                bool discard = frame->pts != AV_NOPTS_VALUE &&
+                               decodeTime < shareClock->clock;
+                if (discard) {
+                    continue;
+                }
                 bipFrameQueue->push(frame);
                 frame = av_frame_alloc();
             } else {
@@ -288,8 +301,10 @@ void *BipVideoTracker::decodeThread(void *args) {
 }
 
 void BipVideoTracker::play() {
-    trackerState = STATE_PLAYING;
-    pthread_create(&playThreadId, nullptr, playVideoThread, this);
+    if (isStart() && !isPlaying()) {
+        trackerState = STATE_PLAYING;
+        pthread_create(&playThreadId, nullptr, playVideoThread, this);
+    }
 }
 
 void BipVideoTracker::start() {

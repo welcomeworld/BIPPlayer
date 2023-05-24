@@ -17,6 +17,7 @@ extern "C" {
 #endif
 
 class BipPacketQueue {
+    static const int MIN_PACKET_SIZE = 30;
     std::queue<AVPacket *> packetQueue{};
     pthread_mutex_t packetMutex{};
     pthread_cond_t packetCond{};
@@ -38,7 +39,7 @@ public:
 
     void notifyAll();
 
-    BipPacketQueue(long maxQueueSize = 1024 * 1024 * 50);
+    BipPacketQueue();
 
     ~BipPacketQueue();
 
