@@ -120,6 +120,10 @@ void BipPlayer::stop() {
     if (videoAvailable()) {
         bipVideoTracker->stop();
     }
+    if (bufferingThreadId != 0 && pthread_kill(bufferingThreadId, 0) == 0) {
+        pthread_join(bufferingThreadId, nullptr);
+        bufferingThreadId = 0;
+    }
     unlock();
     LOGE("prepare thread stop");
     setPlaySpeed(1.0f);
@@ -360,7 +364,11 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
 }
 
 bool BipPlayer::checkCachePrepared() {
-    unsigned long sourceSize = activeDataSources.size();
+    long sourceSize = activeDataSources.size();
+    if (sourceSize == 1) {
+        int streamSize = videoAvailable() ? 1 : 0;
+        sourceSize = streamSize + (audioAvailable() ? 1 : 0);
+    }
     if (videoAvailable() && bipVideoTracker->isFrameReady()) {
         sourceSize -= 1;
     }
@@ -679,7 +687,7 @@ void BipPlayer::checkBuffering() {
             }
             break;
         }
-        av_usleep(500000);
+        av_usleep(300000);
     }
     if (videoAvailable()) {
         bipVideoTracker->bufferingTimes++;
