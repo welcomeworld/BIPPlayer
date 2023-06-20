@@ -45,6 +45,7 @@ public:
     static const int STATE_START = 1;
     static const int STATE_STOP = 2;
     static const int STATE_DESTROY = 3;
+    static const int NO_SEEK = -1;
     std::string source;
     pthread_t prepareThreadId = 0;
     bool isSingleSource = true;
@@ -52,7 +53,7 @@ public:
     bool videoEnable = true;
     bool audioEnable = true;
     std::atomic<int> sourceState = {STATE_CREATED};
-    long seekPosition = 0;
+    long seekPosition = NO_SEEK;
     bool directSeek = false;
     long startOffset = 0;
 };

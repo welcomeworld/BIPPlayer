@@ -6,10 +6,10 @@
 void BipVideoTracker::clearCache() {
     lock();
     avcodec_flush_buffers(avCodecContext);
-    unlock();
     isCacheCompleted = false;
     bipFrameQueue->clear();
     bipPacketQueue->clear();
+    unlock();
 }
 
 void BipVideoTracker::showVideoPacket() {

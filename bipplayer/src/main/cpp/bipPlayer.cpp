@@ -286,9 +286,9 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
 
         //解码
         long syncClock = 0;
-        if (prepareSource->seekPosition > 0) {
+        if (prepareSource->seekPosition != BipDataSource::NO_SEEK) {
             syncClock = prepareSource->seekPosition;
-            prepareSource->seekPosition = 0;
+            prepareSource->seekPosition = BipDataSource::NO_SEEK;
         } else if (prepareSource->isSync || isFromErrorRestart) {
             syncClock = static_cast<long>(shareClock->clock * 1000);
         }
@@ -315,12 +315,12 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
         }
         while (prepareSource->sourceState == BipDataSource::STATE_START && isStarted()) {
             lock();
-            if (prepareSource->seekPosition != 0) {
+            if (prepareSource->seekPosition != BipDataSource::NO_SEEK) {
                 if (prepareSource->directSeek) {
                     av_seek_frame(avFormatContext, -1,
                                   av_rescale(prepareSource->seekPosition, AV_TIME_BASE, 1000),
                                   AVSEEK_FLAG_BACKWARD);
-                    prepareSource->seekPosition = 0;
+                    prepareSource->seekPosition = BipDataSource::NO_SEEK;
                     prepareSource->directSeek = false;
                 } else {
                     unlock();
@@ -351,7 +351,8 @@ void BipPlayer::prepare(BipDataSource *prepareSource) {
                 av_usleep(50000);
             } else {
                 isFromErrorRestart = true;
-                LOGE("break read frame loop for read result %d", readResult);
+                av_strerror(readResult, errorMsg, 1024);
+                LOGE("break read frame loop for read result %d  %s", readResult, errorMsg);
                 break;
             }
         }

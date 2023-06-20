@@ -97,6 +97,7 @@ int BipAudioTracker::getPcm() {
             av_frame_free(&audioFrame);
             continue;
         }
+        lock();
         soundtouch->putSamples(reinterpret_cast<const soundtouch::SAMPLETYPE *>(audioBuffer),
                                outSample);
         int soundOutSample = 0;
@@ -106,6 +107,7 @@ int BipAudioTracker::getPcm() {
                     OUT_SAMPLE_RATE / OUT_CHANNEL_NUMBER));
             size += soundOutSample * OUT_CHANNEL_NUMBER * BYTES_PER_SAMPLE;
         } while (soundOutSample != 0);
+        unlock();
         if (size == 0) {
             av_frame_free(&audioFrame);
             continue;
@@ -220,16 +222,18 @@ void BipAudioTracker::setPlaySpeed(float speed) {
     } else if (speed >= 4) {
         speed = 4;
     }
+    lock();
     soundtouch->setTempo(speed);
+    unlock();
 }
 
 void BipAudioTracker::clearCache() {
     lock();
     avcodec_flush_buffers(audioCodecContext);
-    unlock();
     isCacheCompleted = false;
     bipFrameQueue->clear();
     bipPacketQueue->clear();
+    unlock();
 }
 
 unsigned long BipAudioTracker::getFrameSize() {
