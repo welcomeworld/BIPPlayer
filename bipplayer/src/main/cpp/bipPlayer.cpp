@@ -473,8 +473,8 @@ void BipPlayer::seekTo(long time) {
         shareClock->clock = (double) (time) / 1000;
         requestLockWaitTime = LOCK_FREE;
         unlock();
-        checkBuffering();
-        postEventFromNative(MEDIA_SEEK_COMPLETE, 0, 0, nullptr);
+        isSeeking = true;
+        requestBuffering();
     }
 }
 
@@ -683,12 +683,16 @@ void BipPlayer::checkBuffering() {
         if (checkCachePrepared()) {
             if (hasNotifyPrepared) {
                 postStart();
+                if (isSeeking) {
+                    isSeeking = false;
+                    postEventFromNative(MEDIA_SEEK_COMPLETE, 0, 0, nullptr);
+                }
             } else {
                 notifyPrepared();
             }
             break;
         }
-        av_usleep(300000);
+        av_usleep(200000);
     }
     if (videoAvailable()) {
         bipVideoTracker->bufferingTimes++;

@@ -25,6 +25,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 #include "libavformat/avformat.h"
 #include "libswresample/swresample.h"
 #include "libswscale/swscale.h"
@@ -34,6 +35,7 @@ extern "C" {
 #include "libavutil/opt.h"
 #include "libavutil/avstring.h"
 #include <unistd.h>
+
 #ifdef __cplusplus
 }
 #endif
@@ -146,6 +148,7 @@ private:
     pthread_mutex_t avOpsMutex{};
     std::deque<BipDataSource *> activeDataSources{};
     bool hasNotifyPrepared = false;
+    bool isSeeking = false;
 
     static int ffmpegInterruptCallback(void *ctx);
 
