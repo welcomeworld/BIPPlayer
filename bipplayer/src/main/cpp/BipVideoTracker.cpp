@@ -277,6 +277,8 @@ void BipVideoTracker::decodeInner() {
                 bool discard = frame->pts != AV_NOPTS_VALUE &&
                                decodeTime < shareClock->clock;
                 if (discard) {
+                    av_frame_free(&frame);
+                    frame = av_frame_alloc();
                     continue;
                 }
                 bipFrameQueue->push(frame);
