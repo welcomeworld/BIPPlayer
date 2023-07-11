@@ -58,13 +58,13 @@ private:
     soundtouch::SoundTouch *soundtouch = nullptr;
 
     //创建引擎
-    void createEngine();
+    bool createEngine();
 
     //创建混音器
-    void createMixVolume();
+    bool createMixVolume();
 
     //创建播放器
-    void createPlayer();
+    bool createPlayer();
 
     void initSoundTouch();
 

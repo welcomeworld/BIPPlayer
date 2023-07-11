@@ -3,28 +3,42 @@
 //
 #include "BipAudioTracker.h"
 
-void BipAudioTracker::createEngine() {
-    slCreateEngine(&engineObject, 0, nullptr, 0, nullptr, nullptr);
-    (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);//实现engineObject接口对象
-    (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE,
-                                  &engineEngine);//通过引擎调用接口初始化SLEngineItf
-}
-
-void BipAudioTracker::createMixVolume() {
-    (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 0, nullptr,
-                                     nullptr);//用引擎对象创建混音器接口对象
-    (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);//实现混音器接口对象
-    SLresult sLresult = (*outputMixObject)->GetInterface(outputMixObject,
-                                                         SL_IID_ENVIRONMENTALREVERB,
-                                                         &outputMixEnvironmentalReverb);
-    //设置
-    if (SL_RESULT_SUCCESS == sLresult) {
-        (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
-                outputMixEnvironmentalReverb, &settings);
+bool BipAudioTracker::createEngine() {
+    SLresult sLresult = slCreateEngine(&engineObject, 0, nullptr, 0, nullptr, nullptr);
+    if (SL_RESULT_SUCCESS != sLresult) {
+        return false;
     }
+    sLresult = (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);//实现engineObject接口对象
+    if (SL_RESULT_SUCCESS != sLresult) {
+        return false;
+    }
+    sLresult = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE,
+                                             &engineEngine);//通过引擎调用接口初始化SLEngineItf
+    return SL_RESULT_SUCCESS == sLresult;
 }
 
-void BipAudioTracker::createPlayer() {
+bool BipAudioTracker::createMixVolume() {
+    SLresult sLresult = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 0, nullptr,
+                                                         nullptr);//用引擎对象创建混音器接口对象
+    if (SL_RESULT_SUCCESS != sLresult) {
+        return false;
+    }
+    sLresult = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);//实现混音器接口对象
+    if (SL_RESULT_SUCCESS != sLresult) {
+        return false;
+    }
+    sLresult = (*outputMixObject)->GetInterface(outputMixObject,
+                                                SL_IID_ENVIRONMENTALREVERB,
+                                                &outputMixEnvironmentalReverb);
+    if (SL_RESULT_SUCCESS != sLresult) {
+        return false;
+    }
+    sLresult = (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
+            outputMixEnvironmentalReverb, &settings);
+    return SL_RESULT_SUCCESS == sLresult;
+}
+
+bool BipAudioTracker::createPlayer() {
     SLDataLocator_AndroidBufferQueue androidBufferQueue = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
                                                            2};
     SLDataFormat_PCM pcm = {
@@ -38,16 +52,27 @@ void BipAudioTracker::createPlayer() {
     const SLInterfaceID ids[3] = {SL_IID_BUFFERQUEUE, SL_IID_EFFECTSEND, SL_IID_VOLUME};
     const SLboolean req[3] = {SL_BOOLEAN_FALSE, SL_BOOLEAN_FALSE, SL_BOOLEAN_FALSE};
 
-    SLresult playerResult = (*engineEngine)->CreateAudioPlayer(engineEngine, &audioPlayerObject,
-                                                               &dataSource, &slDataSink, 3, ids,
-                                                               req);
-    if (playerResult != SL_RESULT_SUCCESS) {
-        return;
+    SLresult sLresult = (*engineEngine)->CreateAudioPlayer(engineEngine, &audioPlayerObject,
+                                                           &dataSource, &slDataSink, 3, ids,
+                                                           req);
+    if (sLresult != SL_RESULT_SUCCESS) {
+        return false;
     }
-    (*audioPlayerObject)->Realize(audioPlayerObject, SL_BOOLEAN_FALSE);
-    (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_PLAY, &slPlayItf);
-    (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_BUFFERQUEUE, &slBufferQueueItf);
-    (*slBufferQueueItf)->RegisterCallback(slBufferQueueItf, bufferQueueCallback, this);
+    sLresult = (*audioPlayerObject)->Realize(audioPlayerObject, SL_BOOLEAN_FALSE);
+    if (sLresult != SL_RESULT_SUCCESS) {
+        return false;
+    }
+    sLresult = (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_PLAY, &slPlayItf);
+    if (sLresult != SL_RESULT_SUCCESS) {
+        return false;
+    }
+    sLresult = (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_BUFFERQUEUE,
+                                                  &slBufferQueueItf);
+    if (sLresult != SL_RESULT_SUCCESS) {
+        return false;
+    }
+    sLresult = (*slBufferQueueItf)->RegisterCallback(slBufferQueueItf, bufferQueueCallback, this);
+    return SL_RESULT_SUCCESS == sLresult;
 }
 
 void BipAudioTracker::initSoundTouch() {
@@ -158,9 +183,21 @@ BipAudioTracker::BipAudioTracker(AVCodecParameters *codecPar) {
                        audioCodecContext->sample_rate, 0,
                        nullptr);
     swr_init(audioSwrContext);
-    createEngine();
-    createMixVolume();
-    createPlayer();
+    bool success = createEngine();
+    if (!success) {
+        trackerState = STATE_ERROR;
+        return;
+    }
+    success = createMixVolume();
+    if (!success) {
+        trackerState = STATE_ERROR;
+        return;
+    }
+    success = createPlayer();
+    if (!success) {
+        trackerState = STATE_ERROR;
+        return;
+    }
     initSoundTouch();
     bipFrameQueue = new BipFrameQueue(true);
     bipPacketQueue = new BipPacketQueue();
