@@ -162,6 +162,10 @@ int BipAudioTracker::getPcm() {
 }
 
 BipAudioTracker::BipAudioTracker(AVCodecParameters *codecPar) {
+    initSoundTouch();
+    bipFrameQueue = new BipFrameQueue(true);
+    bipPacketQueue = new BipPacketQueue();
+    audioBuffer = static_cast<uint8_t *>(av_mallocz(1024 * 48));
     //打开音频解码器
     AVCodec *audioCodec = avcodec_find_decoder(codecPar->codec_id);
     audioCodecContext = avcodec_alloc_context3(audioCodec);
@@ -198,10 +202,6 @@ BipAudioTracker::BipAudioTracker(AVCodecParameters *codecPar) {
         trackerState = STATE_ERROR;
         return;
     }
-    initSoundTouch();
-    bipFrameQueue = new BipFrameQueue(true);
-    bipPacketQueue = new BipPacketQueue();
-    audioBuffer = static_cast<uint8_t *>(av_mallocz(1024 * 48));
     trackerState = STATE_CREATED;
 }
 
